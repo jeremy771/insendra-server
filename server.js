@@ -75,10 +75,9 @@ app.get("/deliverables", async (req, res) => {
       data.records.forEach(r => {
         const f = r.fields;
         const cr = f["fldc0vQSOERVGWFuk"];
-        const client = Array.isArray(cr)
-          ? (typeof cr[0] === "string" ? cr[0] : cr[0]?.name || "")
-          : (cr || "");
-        if (!ACTIVE_CLIENTS.includes(client)) return;
+const client = Array.isArray(cr)
+  ? (typeof cr[0] === "string" ? cr[0] : cr[0]?.name || "")
+  : (cr || "");
 
         const getDate = v => (!v || typeof v === "object") ? null : v;
         const getPpl  = v => Array.isArray(v) ? v.map(p => ({ id: p.id, name: p.name })) : [];
