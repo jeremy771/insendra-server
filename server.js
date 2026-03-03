@@ -53,12 +53,10 @@ app.get("/deliverables", async (req, res) => {
       .map(c => `FIND("${c}", ARRAYJOIN({fldc0vQSOERVGWFuk}))`)
       .join(", ");
 
-    const formula = `{fldDZicZUOuhLPCci}!="Complete"`;
 
     do {
       const params = new URLSearchParams();
       AT_FIELDS.forEach(f => params.append("fields[]", f));
-      params.set("filterByFormula", formula);
       params.set("pageSize", "100");
       if (offset) params.set("offset", offset);
 
