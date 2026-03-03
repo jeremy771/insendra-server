@@ -53,7 +53,7 @@ app.get("/deliverables", async (req, res) => {
       .map(c => `FIND("${c}", ARRAYJOIN({fldc0vQSOERVGWFuk}))`)
       .join(", ");
 
-    const formula = `AND({fldDZicZUOuhLPCci}!="Complete",{fldDZicZUOuhLPCci}!="",OR(${clientOr}))`;
+    const formula = `AND({fldDZicZUOuhLPCci}!="Complete",{fldDZicZUOuhLPCci}!="")`;
 
     do {
       const params = new URLSearchParams();
