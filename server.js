@@ -139,3 +139,23 @@ app.post("/slack/interactions", express.urlencoded({ extended: true }), async (r
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Insendra server running on port ${PORT}`));
+
+// ── GET /comments/:recordId ────────────────────────────────────
+app.get("/comments/:recordId", async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    const atRes = await fetch(
+      `https://api.airtable.com/v0/${AT_BASE}/${AT_TABLE}/${recordId}/comments`,
+      { headers: { Authorization: `Bearer ${AT_TOKEN}` } }
+    );
+    if (!atRes.ok) {
+      const err = await atRes.json().catch(() => ({}));
+      return res.status(atRes.status).json({ error: err?.error?.message || `Airtable HTTP ${atRes.status}` });
+    }
+    const data = await atRes.json();
+    res.json({ comments: data.comments || [] });
+  } catch (err) {
+    console.error("/comments error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
