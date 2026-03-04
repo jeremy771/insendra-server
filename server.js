@@ -19,46 +19,36 @@ const ACTIVE_CLIENTS = [
 ];
 
 app.get("/", (req, res) => {
-  res.json({ status: "ok", service: "Insendra Proxy", version: "1.1.0" });
+  res.json({ status: "ok", service: "Insendra Proxy", version: "1.2.0" });
 });
 
 app.get("/deliverables", async (req, res) => {
   try {
     const allRecords = [];
     let offset = null;
-
     do {
       const params = new URLSearchParams();
       params.set("pageSize", "100");
       if (offset) params.set("offset", offset);
-
       const atRes = await fetch(
         `https://api.airtable.com/v0/${AT_BASE}/${AT_TABLE}?${params}`,
         { headers: { Authorization: `Bearer ${AT_TOKEN}` } }
       );
-
       if (!atRes.ok) {
         const err = await atRes.json().catch(() => ({}));
         return res.status(atRes.status).json({ error: err?.error?.message || `Airtable HTTP ${atRes.status}` });
       }
-
       const data = await atRes.json();
-
       data.records.forEach(r => {
         const f = r.fields;
-
         const status = f["Status"] || "";
         if (status === "Complete" || status === "") return;
-
         const clientRaw = f["Client Name (from Client Name)"];
         const client = Array.isArray(clientRaw) ? clientRaw[0] : (clientRaw || "");
         if (!ACTIVE_CLIENTS.includes(client)) return;
-
         const getPpl  = v => Array.isArray(v) ? v.map(p => ({ id: p.id, name: p.name })) : [];
         const getDate = v => (!v || typeof v === "object") ? null : v;
-
         const uploader = getPpl(f["Uploader"]);
-
         allRecords.push({
           id:             r.id,
           name:           f["Deliverable Name"] || "",
@@ -75,10 +65,8 @@ app.get("/deliverables", async (req, res) => {
           uploader:       uploader.length ? uploader[0] : null,
         });
       });
-
       offset = data.offset || null;
     } while (offset);
-
     res.json({ records: allRecords, count: allRecords.length });
   } catch (err) {
     console.error("/deliverables error:", err);
@@ -86,9 +74,10 @@ app.get("/deliverables", async (req, res) => {
   }
 });
 
+// ── POST /send-dm — supports both blocks and attachments ───────
 app.post("/send-dm", async (req, res) => {
   try {
-    const { slackUserId, blocks, text = "Insendra task update" } = req.body;
+    const { slackUserId, blocks, attachments, text = "Insendra task update" } = req.body;
     const openRes = await fetch("https://slack.com/api/conversations.open", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${SLACK_TOKEN}` },
@@ -96,10 +85,15 @@ app.post("/send-dm", async (req, res) => {
     });
     const openData = await openRes.json();
     if (!openData.ok) return res.status(400).json({ error: `conversations.open: ${openData.error}` });
+
+    const payload = { channel: openData.channel.id, text };
+    if (attachments) payload.attachments = attachments;
+    if (blocks)      payload.blocks      = blocks;
+
     const msgRes = await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${SLACK_TOKEN}` },
-      body: JSON.stringify({ channel: openData.channel.id, text, blocks }),
+      body: JSON.stringify(payload),
     });
     const msgData = await msgRes.json();
     if (!msgData.ok) return res.status(400).json({ error: `chat.postMessage: ${msgData.error}` });
@@ -112,11 +106,14 @@ app.post("/send-dm", async (req, res) => {
 
 app.post("/send-channel", async (req, res) => {
   try {
-    const { channelId, blocks, text = "Insendra digest" } = req.body;
+    const { channelId, blocks, attachments, text = "Insendra digest" } = req.body;
+    const payload = { channel: channelId, text };
+    if (attachments) payload.attachments = attachments;
+    if (blocks)      payload.blocks      = blocks;
     const msgRes = await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${SLACK_TOKEN}` },
-      body: JSON.stringify({ channel: channelId, text, blocks }),
+      body: JSON.stringify(payload),
     });
     const msgData = await msgRes.json();
     if (!msgData.ok) return res.status(400).json({ error: `chat.postMessage: ${msgData.error}` });
