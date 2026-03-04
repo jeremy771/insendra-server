@@ -52,6 +52,7 @@ app.get("/deliverables", async (req, res) => {
         allRecords.push({
           id:             r.id,
           name:           f["Deliverable Name"] || "",
+          createdTime:    r.createdTime || null,
           status,
           client,
           sendDate:       getDate(f["Send Date/Activation Date"]),
