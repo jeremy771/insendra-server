@@ -93,7 +93,7 @@ app.get("/health", (req, res) => res.json({ ok: true, version: "2.0.0" }));
 app.get("/deliverables", async (req, res) => {
   try {
     const getDate = v => v ? (Array.isArray(v) ? v[0] : v) : null;
-    const getPpl  = v => (v || []).map(p => ({ id: p.id, name: p.name }));
+    const getPpl  = v => { if(!v)return []; const arr=Array.isArray(v)?v:[v]; return arr.map(p=>typeof p==='object'?{id:p.id||'',name:p.name||''}:{id:p,name:p}); };
     let allRecords = [], offset = null;
     do {
       const url = new URL(`https://api.airtable.com/v0/${AT_BASE}/${AT_TABLE}`);
@@ -130,8 +130,8 @@ app.get("/deliverables", async (req, res) => {
     } while (offset);
     res.json({ records: allRecords, count: allRecords.length });
   } catch (err) {
-    console.error("/deliverables error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("/deliverables error:", err.message, err.stack);
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
 
@@ -199,7 +199,7 @@ app.get("/performance", (req, res) => {
 app.post("/snapshot", async (req, res) => {
   try {
     const getDate = v => v ? (Array.isArray(v) ? v[0] : v) : null;
-    const getPpl  = v => (v || []).map(p => ({ id: p.id, name: p.name }));
+    const getPpl  = v => { if(!v)return []; const arr=Array.isArray(v)?v:[v]; return arr.map(p=>typeof p==='object'?{id:p.id||'',name:p.name||''}:{id:p,name:p}); };
     let allRecords = [], offset = null;
     do {
       const url = new URL(`https://api.airtable.com/v0/${AT_BASE}/${AT_TABLE}`);
