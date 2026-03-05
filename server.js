@@ -384,7 +384,8 @@ const PRIORITY_COLORS = {
 
 function daysUntilEST(str) {
   if (!str) return null;
-  const parts = str.slice(0, 10).split("-").map(Number);
+  const s = String(str).slice(0, 10);
+  const parts = s.split("-").map(Number);
   if (parts.length !== 3) return null;
   const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
