@@ -976,9 +976,10 @@ function TeamDashboard({personId}){
         </div>
         <div style={{padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
           {calDays.map(d=>{
-            const key=d.toISOString().slice(0,10);
+            const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+            const todayKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
             const dayTasks=tasksByDate[key]||[];
-            const isToday=key===today.toISOString().slice(0,10);
+            const isToday=key===todayKey;
             const hasTasks=dayTasks.length>0;
             const hasOverdue=dayTasks.some(t=>t.days<0);
             const dotColor=hasOverdue?PRIORITY_COLOR.overdue:hasTasks?B.purple:"transparent";
@@ -1031,8 +1032,8 @@ function ClientDashboard({clientName}){
           return fromName&&normalize(fromName)===normalize(clientName);
         });
         // Use first matched client name as canonical
-        const resolved=items[0]?.client||clientName;
-        setCanonicalClient(resolved);
+        // Use the clientName param as canonical (it's already the display name from the URL)
+        setCanonicalClient(clientName);
         setDeliverables(items);
 
         // Generate local client summary
