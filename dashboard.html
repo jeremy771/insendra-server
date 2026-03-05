@@ -969,33 +969,67 @@ function TeamDashboard({personId}){
         </div>
       </div>
 
-      {/* Deadline Calendar */}
+      {/* Deadline Calendar — proper month grid */}
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`}}>
-          <Label>Deadline Calendar — Next 30 Days</Label>
+          <Label>Deadline Calendar</Label>
         </div>
-        <div style={{padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
-          {calDays.map(d=>{
-            const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-            const todayKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
-            const dayTasks=tasksByDate[key]||[];
-            const isToday=key===todayKey;
-            const hasTasks=dayTasks.length>0;
-            const hasOverdue=dayTasks.some(t=>t.days<0);
-            const dotColor=hasOverdue?PRIORITY_COLOR.overdue:hasTasks?B.purple:"transparent";
-            return(
-              <div key={key} title={hasTasks?dayTasks.map(t=>t.name).join(", "):""} style={{
-                padding:"6px 4px",borderRadius:6,textAlign:"center",
-                background:isToday?B.purple:hasTasks?B.pageBg:B.white,
-                border:`1.5px solid ${isToday?B.purple:hasTasks?B.border:"transparent"}`,
-                cursor:hasTasks?"pointer":"default"
-              }}>
-                <div style={{fontSize:10,color:isToday?"#fff":B.sub,fontWeight:isToday?700:400}}>{d.getDate()}</div>
-                <div style={{fontSize:8,color:isToday?"rgba(255,255,255,0.7)":B.sub}}>{d.toLocaleDateString("en-US",{month:"short"})}</div>
-                {hasTasks&&<div style={{width:6,height:6,borderRadius:"50%",background:isToday?"#fff":dotColor,margin:"3px auto 0"}}/>}
-              </div>
-            );
-          })}
+        <div style={{padding:"16px 18px"}}>
+          {(()=>{
+            const toKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+            const todayKey=toKey(today);
+            const endDate=new Date(today);endDate.setDate(today.getDate()+30);
+            const months=[];
+            let cur=new Date(today.getFullYear(),today.getMonth(),1);
+            while(cur<=endDate){months.push(new Date(cur));cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);}
+            const dayNames=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+            return months.map(monthStart=>{
+              const monthName=monthStart.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+              const daysInMonth=new Date(monthStart.getFullYear(),monthStart.getMonth()+1,0).getDate();
+              const firstDow=monthStart.getDay();
+              const cells=[];
+              for(let i=0;i<firstDow;i++) cells.push(null);
+              for(let d=1;d<=daysInMonth;d++) cells.push(new Date(monthStart.getFullYear(),monthStart.getMonth(),d));
+              return(
+                <div key={monthName} style={{marginBottom:20}}>
+                  <div style={{fontSize:12,fontWeight:700,color:B.text,marginBottom:8}}>{monthName}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:3}}>
+                    {dayNames.map(dn=><div key={dn} style={{textAlign:"center",fontSize:9,fontWeight:700,color:B.sub,padding:"2px 0"}}>{dn}</div>)}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+                    {cells.map((d,i)=>{
+                      if(!d) return <div key={`e${i}`}/>;
+                      const key=toKey(d);
+                      const dayTasks=tasksByDate[key]||[];
+                      const isToday=key===todayKey;
+                      const hasTasks=dayTasks.length>0;
+                      const hasOverdue=dayTasks.some(t=>t.days<0);
+                      const isPast=d<today&&!isToday;
+                      const dotColor=hasOverdue?PRIORITY_COLOR.overdue:B.purple;
+                      // Only show days within our 30-day window
+                      const inRange=d>=today&&d<=endDate;
+                      if(!inRange&&!isToday) return(
+                        <div key={key} style={{padding:"6px 2px",textAlign:"center",opacity:0.25}}>
+                          <div style={{fontSize:11,color:B.sub}}>{d.getDate()}</div>
+                        </div>
+                      );
+                      return(
+                        <div key={key} title={hasTasks?dayTasks.map(t=>t.name).join(", "):""} style={{
+                          padding:"6px 2px",borderRadius:6,textAlign:"center",
+                          background:isToday?B.purple:hasTasks?B.pageBg:"transparent",
+                          border:`1.5px solid ${isToday?B.purple:hasTasks?B.border:"transparent"}`,
+                          cursor:hasTasks?"pointer":"default"
+                        }}>
+                          <div style={{fontSize:11,fontWeight:isToday?700:hasTasks?600:400,color:isToday?"#fff":hasTasks?B.text:B.mid}}>{d.getDate()}</div>
+                          {hasTasks&&<div style={{width:6,height:6,borderRadius:"50%",background:isToday?"#fff":dotColor,margin:"2px auto 0"}}/>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            });
+          })()}
         </div>
       </Card>
     </div>
