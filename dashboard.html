@@ -1101,20 +1101,26 @@ function ClientDashboard({clientName}){
         </Card>
       )}
 
-      {/* Stats */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
-        {[
-          {label:"In Progress",   value:deliverables.filter(d=>!["Complete","Client Review","Upload","Schedule"].includes(d.status)).length, color:B.orange},
-          {label:"Client Review", value:deliverables.filter(d=>d.status==="Client Review").length,  color:"#805AD5"},
-          {label:"Ready to Send", value:deliverables.filter(d=>["Upload","Schedule"].includes(d.status)).length, color:B.cyan},
-          {label:"Completed",     value:deliverables.filter(d=>d.status==="Complete").length,        color:B.green},
-        ].map(s=>(
-          <Card key={s.label} style={{padding:"14px 16px",textAlign:"center"}}>
-            <div style={{fontSize:28,fontWeight:700,color:s.color}}>{s.value}</div>
-            <div style={{fontSize:11,color:B.sub,fontWeight:600}}>{s.label}</div>
-          </Card>
-        ))}
-      </div>
+      {/* Stats — dynamic status breakdown */}
+      {(()=>{
+        const statusOrder=["Ready for Copy","Copywriting in Progress","Copywriting Complete - Ready for QA","Ready For Design","Design in Progress","Design Complete - Ready for QA","Client Review","Upload","Schedule","Complete"];
+        const statusColors={"Ready for Copy":"#E53E3E","Copywriting in Progress":"#E53E3E","Copywriting Complete - Ready for QA":B.cyan,"Ready For Design":B.orange,"Design in Progress":B.orange,"Design Complete - Ready for QA":B.cyan,"Client Review":"#805AD5","Upload":"#3182CE","Schedule":"#2B6CB0","Complete":B.green};
+        const statusLabels={"Ready for Copy":"Ready for Copy","Copywriting in Progress":"Writing Copy","Copywriting Complete - Ready for QA":"Copy QA","Ready For Design":"Ready for Design","Design in Progress":"Designing","Design Complete - Ready for QA":"Design QA","Client Review":"Client Review","Upload":"Upload","Schedule":"Schedule","Complete":"Complete"};
+        const counts={};
+        deliverables.forEach(d=>{if(d.status)counts[d.status]=(counts[d.status]||0)+1;});
+        const active=statusOrder.filter(s=>counts[s]>0);
+        const cols=Math.min(active.length,5);
+        return(
+          <div style={{display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gap:10,marginBottom:20}}>
+            {active.map(s=>(
+              <Card key={s} style={{padding:"12px 14px",textAlign:"center"}}>
+                <div style={{fontSize:26,fontWeight:700,color:statusColors[s]||B.mid}}>{counts[s]}</div>
+                <div style={{fontSize:10,color:B.sub,fontWeight:600,lineHeight:1.3,marginTop:2}}>{statusLabels[s]||s}</div>
+              </Card>
+            ))}
+          </div>
+        );
+      })()}
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
         {/* Active deliverables */}
@@ -1142,47 +1148,100 @@ function ClientDashboard({clientName}){
           </div>
         </Card>
 
-        {/* Send Calendar */}
+        {/* Send Calendar — proper month grid */}
         <Card style={{padding:0,overflow:"hidden"}}>
           <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`}}>
-            <Label>Send Calendar — Next 60 Days</Label>
+            <Label>Send Calendar</Label>
           </div>
-          <div style={{padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
-            {calDays.map(d=>{
-              const key=d.toISOString().slice(0,10);
-              const sends=sendsByDate[key]||[];
-              const isToday=key===today.toISOString().slice(0,10);
-              return(
-                <div key={key} title={sends.map(s=>s.name).join(", ")} style={{
-                  padding:"5px 3px",borderRadius:5,textAlign:"center",
-                  background:isToday?B.purple:sends.length>0?"#EBF8FF":B.white,
-                  border:`1.5px solid ${isToday?B.purple:sends.length>0?B.cyan:"transparent"}`,
-                  cursor:sends.length>0?"pointer":"default"
-                }}>
-                  <div style={{fontSize:9,color:isToday?"#fff":B.sub}}>{d.getDate()}</div>
-                  {sends.length>0&&<div style={{width:5,height:5,borderRadius:"50%",background:isToday?"#fff":B.cyan,margin:"2px auto 0"}}/>}
-                </div>
-              );
-            })}
-          </div>
-          {/* Send list */}
-          <div style={{padding:"0 18px 14px"}}>
-            {Object.entries(sendsByDate).sort().slice(0,8).map(([date,items])=>(
-              <div key={date} style={{display:"flex",gap:10,marginBottom:6,alignItems:"flex-start"}}>
-                <div style={{fontSize:11,fontWeight:700,color:B.purple,minWidth:52}}>{new Date(date+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
-                <div style={{flex:1}}>
-                  {items.map(t=>(
-                    <div key={t.id} style={{fontSize:11,color:B.mid,marginBottom:2}}>{t.name.replace(/^\[.*?\]\s*/,"")}</div>
-                  ))}
-                </div>
+          {(()=>{
+            // Build a proper month-based calendar starting from today
+            const toKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+            const todayKey=toKey(today);
+            // Fix sendsByDate to use local dates
+            const sendsLocal={};
+            deliverables.filter(d=>d.sendDate).forEach(d=>{
+              const parts=d.sendDate.slice(0,10).split("-");
+              const key=`${parts[0]}-${parts[1]}-${parts[2]}`;
+              sendsLocal[key]=sendsLocal[key]||[];
+              sendsLocal[key].push(d);
+            });
+            // Build month grids covering next 60 days
+            const endDate=new Date(today);endDate.setDate(today.getDate()+60);
+            // Get unique months to render
+            const months=[];
+            let cur=new Date(today.getFullYear(),today.getMonth(),1);
+            while(cur<=endDate){months.push(new Date(cur));cur.setMonth(cur.getMonth()+1);}
+            const dayNames=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+            return(
+              <div style={{padding:"16px 18px"}}>
+                {months.map(monthStart=>{
+                  const monthName=monthStart.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+                  // Days in this month
+                  const daysInMonth=new Date(monthStart.getFullYear(),monthStart.getMonth()+1,0).getDate();
+                  const firstDow=monthStart.getDay(); // 0=Sun
+                  const cells=[];
+                  // Empty cells before first day
+                  for(let i=0;i<firstDow;i++) cells.push(null);
+                  for(let d=1;d<=daysInMonth;d++) cells.push(new Date(monthStart.getFullYear(),monthStart.getMonth(),d));
+                  return(
+                    <div key={monthName} style={{marginBottom:24}}>
+                      <div style={{fontSize:13,fontWeight:700,color:B.text,marginBottom:10}}>{monthName}</div>
+                      {/* Day headers */}
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
+                        {dayNames.map(dn=><div key={dn} style={{textAlign:"center",fontSize:9,fontWeight:700,color:B.sub,padding:"2px 0"}}>{dn}</div>)}
+                      </div>
+                      {/* Day cells */}
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+                        {cells.map((d,i)=>{
+                          if(!d) return <div key={`e${i}`}/>;
+                          const key=toKey(d);
+                          const sends=sendsLocal[key]||[];
+                          const isToday=key===todayKey;
+                          const hasSend=sends.length>0;
+                          const isPast=d<today&&!isToday;
+                          return(
+                            <div key={key} title={sends.map(s=>s.name.replace(/^\[.*?\]\s*/,"")).join(", ")} style={{
+                              padding:"6px 2px",borderRadius:6,textAlign:"center",
+                              background:isToday?B.purple:hasSend?"#E0F7FF":isPast?"transparent":B.white,
+                              border:`1.5px solid ${isToday?B.purple:hasSend?B.cyan:"transparent"}`,
+                              cursor:hasSend?"pointer":"default",
+                              opacity:isPast?0.4:1
+                            }}>
+                              <div style={{fontSize:11,fontWeight:isToday?700:hasSend?600:400,color:isToday?"#fff":hasSend?B.purple:B.mid}}>{d.getDate()}</div>
+                              {hasSend&&<div style={{width:5,height:5,borderRadius:"50%",background:isToday?"#fff":B.cyan,margin:"2px auto 0"}}/>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Send list */}
+                {Object.keys(sendsLocal).filter(k=>k>=todayKey).sort().length>0&&(
+                  <div style={{borderTop:`1.5px solid ${B.border}`,paddingTop:14,marginTop:4}}>
+                    <div style={{fontSize:10,fontWeight:700,color:B.sub,letterSpacing:"0.1em",marginBottom:10}}>UPCOMING SENDS</div>
+                    {Object.entries(sendsLocal).filter(([k])=>k>=todayKey).sort().slice(0,10).map(([date,items])=>(
+                      <div key={date} style={{display:"flex",gap:10,marginBottom:7,alignItems:"flex-start"}}>
+                        <div style={{fontSize:11,fontWeight:700,color:B.purple,minWidth:56}}>{new Date(date+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
+                        <div style={{flex:1}}>
+                          {items.map(t=>(
+                            <div key={t.id} style={{fontSize:11,color:B.mid,marginBottom:2}}>{t.name.replace(/^\[.*?\]\s*/,"")}</div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            );
+          })()}
         </Card>
       </div>
     </div>
   );
 }
+
+function App(){
 
 function App(){
   // ── URL routing ─────────────────────────────────────────────────
