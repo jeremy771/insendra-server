@@ -8,7 +8,8 @@ const PORT       = process.env.PORT || 10000;
 const AT_TOKEN   = process.env.AT_TOKEN;
 const AT_BASE    = process.env.AT_BASE    || "appdD2UGbFIfzkj7q";
 const AT_TABLE   = process.env.AT_TABLE   || "tbltj1I38yoAh2HOF";
-const SLACK_TOKEN= process.env.SLACK_TOKEN;
+const SLACK_TOKEN   = process.env.SLACK_TOKEN;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY;
 
 app.use(cors());
 app.use(express.json());
@@ -561,6 +562,164 @@ setTimeout(() => {
 }, 30000);
 
 console.log(`[poll] Status change polling started — every ${POLL_INTERVAL_MS / 60000} minutes`);
+
+
+// ── Slack Event Subscriptions ─────────────────────────────────────
+const processedEvents = new Set();
+
+app.post("/slack/events", async (req, res) => {
+  const body = req.body;
+
+  // URL verification challenge (Slack setup)
+  if (body.type === "url_verification") {
+    return res.json({ challenge: body.challenge });
+  }
+
+  // Acknowledge immediately so Slack doesn't retry
+  res.sendStatus(200);
+
+  const event = body.event;
+  if (!event) return;
+  if (event.type !== "message") return;
+  if (event.subtype) return;
+  if (event.bot_id) return;
+
+  // Dedup
+  if (processedEvents.has(event.client_msg_id)) return;
+  if (event.client_msg_id) processedEvents.add(event.client_msg_id);
+  if (processedEvents.size > 500) processedEvents.clear();
+
+  const userSlackId = event.user;
+  const channelId   = event.channel;
+  const userMessage = (event.text || "").trim();
+  if (!userMessage) return;
+
+  const person = Object.entries(TEAM).find(([, m]) => m.slackId === userSlackId)?.[1];
+  const personName = person?.name || "a team member";
+
+  try {
+    const records = await fetchAllDeliverables();
+    const taskContext = buildTaskContext(records, userSlackId);
+
+    const systemPrompt = `You are Insendra, an assistant for a marketing agency's task management system.
+You help team members understand their tasks, deadlines, and workflow.
+You are speaking with ${personName}.
+
+Here is the current live task data from Airtable:
+
+${taskContext}
+
+Guidelines:
+- Be concise and direct. No fluff.
+- Use plain text — no markdown headers, no bullet symbols, minimal bold.
+- When listing tasks keep it short: name, status, deadline.
+- Dates are in EST.
+- Workflow order: Ready for Copy → Copywriting in Progress → Copywriting Complete - Ready for QA → Ready For Design → Design in Progress → Design Complete - Ready for QA → Client Review → Upload → Schedule → Complete
+- Client Review means the client is reviewing and a manager needs to follow up.`;
+
+    const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userMessage }],
+      }),
+    });
+
+    const claudeData = await claudeRes.json();
+    const reply = claudeData.content?.[0]?.text || "Sorry, I couldn't process that. Try again.";
+
+    await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${SLACK_TOKEN}` },
+      body: JSON.stringify({ channel: channelId, text: reply }),
+    });
+
+    console.log(`[chat] ${personName}: "${userMessage.slice(0, 60)}" → replied`);
+  } catch (err) {
+    console.error("[chat] Error:", err.message);
+    await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${SLACK_TOKEN}` },
+      body: JSON.stringify({ channel: channelId, text: "Something went wrong. Try again in a moment." }),
+    });
+  }
+});
+
+function buildTaskContext(records, userSlackId) {
+  const lines = [];
+  const person = Object.entries(TEAM).find(([, m]) => m.slackId === userSlackId)?.[1];
+
+  // Person's own tasks first
+  if (person) {
+    const myTasks = records.filter(r => {
+      const sc = STATUS_ACTIONS[r.status];
+      if (!sc) return false;
+      let owners = [];
+      if (sc.role === "manager")    owners = r.manager    || [];
+      if (sc.role === "copywriter") owners = r.copywriter || [];
+      if (sc.role === "designer")   owners = r.designer   || [];
+      if (sc.role === "uploader")   owners = r.uploader ? [r.uploader] : [];
+      return owners.some(o => o.id && TEAM[o.id]?.slackId === userSlackId);
+    });
+    if (myTasks.length) {
+      lines.push(`=== ${person.name}'s Current Tasks ===`);
+      myTasks.forEach(r => {
+        const sc = STATUS_ACTIONS[r.status];
+        const urgDate = r[sc?.urgencyField] || r.sendDate;
+        const days = daysUntilEST(urgDate);
+        const daysStr = days === null ? "" : days < 0 ? ` (${Math.abs(days)}d OVERDUE)` : days === 0 ? " (due TODAY)" : ` (${days}d left)`;
+        lines.push(`- ${r.name} | ${r.status} | ${sc?.action || ""}${daysStr}`);
+      });
+      lines.push("");
+    }
+  }
+
+  // All active deliverables by client
+  lines.push("=== All Active Deliverables ===");
+  const byClient = {};
+  records.forEach(r => { const c = r.client || "Unknown"; byClient[c] = byClient[c] || []; byClient[c].push(r); });
+  Object.entries(byClient).forEach(([client, tasks]) => {
+    lines.push(`
+[${client}]`);
+    tasks.forEach(r => {
+      const days = daysUntilEST(r.sendDate);
+      const daysStr = days === null ? "" : ` | Send: ${r.sendDate?.slice(0,10)}${days < 0 ? ` (${Math.abs(days)}d overdue)` : ` (${days}d)`}`;
+      const people = [r.manager?.[0]?.name, r.copywriter?.[0]?.name, r.designer?.[0]?.name].filter(Boolean).join(", ");
+      lines.push(`- ${r.name} | ${r.status}${daysStr} | Team: ${people}`);
+    });
+  });
+
+  // Team workload summary
+  lines.push("
+=== Team Workload ===");
+  Object.entries(TEAM).forEach(([id, member]) => {
+    const owned = records.filter(r => {
+      const sc = STATUS_ACTIONS[r.status];
+      if (!sc) return false;
+      let owners = [];
+      if (sc.role === "manager")    owners = r.manager    || [];
+      if (sc.role === "copywriter") owners = r.copywriter || [];
+      if (sc.role === "designer")   owners = r.designer   || [];
+      if (sc.role === "uploader")   owners = r.uploader ? [r.uploader] : [];
+      return owners.some(o => o.id === id);
+    });
+    const overdue = owned.filter(r => {
+      const sc = STATUS_ACTIONS[r.status];
+      const d = daysUntilEST(r[sc?.urgencyField] || r.sendDate);
+      return d !== null && d < 0;
+    }).length;
+    lines.push(`- ${member.name} (${member.role}): ${owned.length} active tasks${overdue > 0 ? `, ${overdue} overdue` : ""}`);
+  });
+
+  return lines.join("\n");
+}
 
 // ── GET /dashboard ───────────────────────────────────────────────
 app.get("/dashboard", (req, res) => {
