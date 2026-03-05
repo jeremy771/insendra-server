@@ -1240,7 +1240,7 @@ function App(){
     schRef.current=null;setSched(false);setNr(null);setCd("");
     log({msg:"Scheduler stopped",t:"info"});
   };
-  const teamList=Object.values(CONFIG.team);
+  const teamList=Object.entries(CONFIG.team).map(([id,m])=>({...m,id}));
   const clientList=Object.entries(CONFIG.clientChannels);
   const logColor={ok:B.green,err:"#DC2626",head:B.purple,info:B.mid};
   const priorityLegend=[
