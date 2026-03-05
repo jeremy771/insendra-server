@@ -116,9 +116,9 @@ app.get("/deliverables", async (req, res) => {
           status:         f["Status"] || "",
           client,
           sendDate:       getDate(f["Send Date/Activation Date"]),
-          copyDeadline:   getDate(f["\uD83D\uDCC5Copy Deadline"] || f["Copy Deadline"]),
-          designDeadline: getDate(f["\uD83C\uDFA8Design Deadline"] || f["Design Deadline"]),
-          uploadDeadline: getDate(f["\uD83D\uDCE4Klaviyo Upload Deadline"] || f["Klaviyo Upload Deadline"]),
+          copyDeadline:   getDate(Object.entries(f).find(([k])=>k.includes("Copy Deadline"))?.[1]),
+          designDeadline: getDate(Object.entries(f).find(([k])=>k.includes("Design Deadline"))?.[1]),
+          uploadDeadline: getDate(Object.entries(f).find(([k])=>k.includes("Upload Deadline")||k.includes("Klaviyo Upload"))?.[1]),
           dueDate:        getDate(f["Due Date"]),
           manager:        getPpl(f["Manager"]),
           copywriter:     getPpl(f["Copywriter"]),
@@ -231,6 +231,114 @@ app.post("/snapshot", async (req, res) => {
     updatePerformanceLog(allRecords);
     res.json({ ok: true, records: allRecords.length });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /backfill ────────────────────────────────────────────────
+// Fetches completed records since a start date and infers on-time
+// status using sendDate as the completion deadline proxy.
+app.post("/backfill", async (req, res) => {
+  try {
+    const { since = "2026-01-01" } = req.body;
+    const sinceDate = new Date(since);
+    const getDate = v => v ? (Array.isArray(v) ? v[0] : v) : null;
+    const getPpl  = v => { if(!v)return []; const arr=Array.isArray(v)?v:[v]; return arr.map(p=>typeof p==="object"?{id:p.id||"",name:p.name||""}:{id:p,name:p}); };
+
+    let allRecords = [], offset = null;
+    do {
+      const url = new URL(`https://api.airtable.com/v0/${AT_BASE}/${AT_TABLE}`);
+      url.searchParams.set("pageSize", "100");
+      // Fetch completed records with a send date after our since date
+      url.searchParams.set("filterByFormula",
+        `AND({Status} = "Complete", IS_AFTER({Send Date/Activation Date}, "${since}"))`
+      );
+      if (offset) url.searchParams.set("offset", offset);
+      const atRes = await fetch(url.toString(), { headers: { Authorization: `Bearer ${AT_TOKEN}` } });
+      const data = await atRes.json();
+      if (data.error) return res.status(400).json({ error: data.error });
+      (data.records || []).forEach(r => {
+        const f = r.fields;
+        const upArr = getPpl(f["Uploader"]);
+        allRecords.push({
+          id:             r.id,
+          name:           f["Deliverable Name"] || "",
+          status:         "Complete",
+          statusUpdated:  f["Status Updated"] || r.createdTime || null,
+          createdTime:    r.createdTime,
+          copyDeadline:   getDate(f["Copy Deadline"]),
+          designDeadline: getDate(f["Design Deadline"]),
+          uploadDeadline: getDate(f["Klaviyo Upload Deadline"]),
+          dueDate:        getDate(f["Due Date"]),
+          sendDate:       getDate(f["Send Date/Activation Date"]),
+          manager:        getPpl(f["Manager"]),
+          copywriter:     getPpl(f["Copywriter"]),
+          designer:       getPpl(f["Designer"]),
+          uploader:       upArr.length ? upArr[0] : null,
+          client:         Array.isArray(f["Client Name"]) ? f["Client Name"][0] : f["Client Name"] || "",
+        });
+      });
+      offset = data.offset || null;
+    } while (offset);
+
+    // Filter to records after sinceDate
+    const filtered = allRecords.filter(d => d.sendDate && new Date(d.sendDate) >= sinceDate);
+
+    const perfLog = readJSON(PERF_LOG, []);
+    const existingIds = new Set(perfLog.map(e => e.taskId + e.role));
+    let added = 0;
+
+    filtered.forEach(d => {
+      // For each role, check if they had a deadline and infer on-time
+      const roles = [
+        { role:"copywriter", people: d.copywriter,                    deadline: d.copyDeadline   },
+        { role:"designer",   people: d.designer,                      deadline: d.designDeadline },
+        { role:"uploader",   people: d.uploader ? [d.uploader] : [],  deadline: d.uploadDeadline },
+        { role:"manager",    people: d.manager,                       deadline: d.dueDate        },
+      ];
+
+      roles.forEach(({ role, people, deadline }) => {
+        if (!people?.length || !deadline) return;
+        // Only use statusUpdated — skip if not available (no proxy fallback)
+        if (!d.statusUpdated) return;
+        const completedAt = new Date(d.statusUpdated);
+        const deadlineDate = new Date(deadline);
+        deadlineDate.setHours(23, 59, 59, 999);
+        const onTime = completedAt <= deadlineDate;
+        const month = completedAt.toISOString().slice(0, 7);
+
+        // Skip if before sinceDate
+        if (completedAt < sinceDate) return;
+
+        people.forEach(p => {
+          const key = d.id + role;
+          if (existingIds.has(key)) return; // don't duplicate
+          existingIds.add(key);
+          perfLog.push({
+            personId:    p.id,
+            personName:  p.name,
+            role,
+            taskId:      d.id,
+            taskName:    d.name,
+            client:      d.client,
+            fromStatus:  "backfill",
+            toStatus:    "Complete",
+            deadline,
+            completedAt: completedAt.toISOString(),
+            onTime,
+            month,
+            backfilled:  true,
+          });
+          added++;
+        });
+      });
+    });
+
+    writeJSON(PERF_LOG, perfLog);
+    console.log(`Backfill complete — added ${added} entries from ${filtered.length} records`);
+    res.json({ ok: true, recordsFound: filtered.length, entriesAdded: added });
+  } catch (err) {
+    console.error("/backfill error:", err);
     res.status(500).json({ error: err.message });
   }
 });
