@@ -703,14 +703,17 @@ function TeamDashboard({personId}){
         setPerf((perfData.entries||[]).filter(e=>e.personId===personId));
 
         // Generate local summary based on task counts
-        const ov=myTasks.filter(t=>t.days!==null&&t.days<0);
-        const sn=myTasks.filter(t=>t.days!==null&&t.days>=0&&t.days<=3);
-        const firstName=me?.name?.split(" ")[0]||"there";
-        let msg="";
-        if(ov.length>0) msg=`Hey ${firstName}, you have ${ov.length} overdue task${ov.length>1?"s":""} that need${ov.length===1?"s":""} immediate attention${sn.length>0?` and ${sn.length} more due within 3 days`:""}. Let's get those resolved first.`;
-        else if(sn.length>0) msg=`Hey ${firstName}, you're in good shape — no overdue tasks. You have ${sn.length} task${sn.length>1?"s":""} due within the next 3 days, so keep the momentum going.`;
-        else msg=`Hey ${firstName}, you're all caught up on urgent items! Take a look at your upcoming tasks below to stay ahead of the schedule.`;
-        setSummary(msg);
+        try{
+          const ov=myTasks.filter(t=>t.days!==null&&t.days<0);
+          const sn=myTasks.filter(t=>t.days!==null&&t.days>=0&&t.days<=3);
+          const firstName=me?.name?.split(" ")[0]||"there";
+          let msg="";
+          if(ov.length>0) msg=`Hey ${firstName}, you have ${ov.length} overdue task${ov.length>1?"s":""} that need${ov.length===1?"s":""} immediate attention${sn.length>0?` and ${sn.length} more due within 3 days`:""}. Let's get those resolved first.`;
+          else if(sn.length>0) msg=`Hey ${firstName}, you're in good shape — no overdue tasks. You have ${sn.length} task${sn.length>1?"s":""} due within the next 3 days, so keep the momentum going.`;
+          else if(myTasks.length>0) msg=`Hey ${firstName}, you're all caught up on urgent items! Take a look at your upcoming tasks below to stay ahead of the schedule.`;
+          else msg=`Hey ${firstName}, you have no active tasks assigned right now. Check back after the next bot run.`;
+          setSummary(msg);
+        }catch(e){console.warn("Summary error",e);}
       }catch(e){console.error(e);}
       setLoading(false);
     })();
@@ -733,7 +736,11 @@ function TeamDashboard({personId}){
   // Extract client from task name prefix e.g. [ELI] -> Eli Health, [C4C] -> Chandler 4 Corners
   const prefixMap={
     "ELI":"Eli Health","C4C":"Chandler 4 Corners","SG":"Safety Gear",
-    "FW":"Fore & Wharf","CAK":"CablesAndKits","CK":"CablesAndKits"
+    "FW":"Fore & Wharf","CAK":"CablesAndKits","CK":"CablesAndKits",
+    "CAB":"CablesAndKits","CABLES":"CablesAndKits",
+    "CH":"Chandler 4 Corners","CHAN":"Chandler 4 Corners",
+    "SAFETY":"Safety Gear","FORE":"Fore & Wharf","WHARF":"Fore & Wharf",
+    "EH":"Eli Health","ELI":"Eli Health"
   };
   const clientFromName=name=>{
     const m=name&&name.match(/^\[([A-Z0-9]+)\]/);
@@ -749,9 +756,16 @@ function TeamDashboard({personId}){
     if(fromName)return fromName;
     // Skip record IDs
     if(!raw||/^rec[A-Za-z0-9]{5,}$/.test(raw))return null;
-    // Try normalizing against CONFIG
+    // Try normalizing against CONFIG client names
     const norm=raw.toLowerCase().replace(/[^a-z0-9]/g,"");
-    return clientNameMap[norm]||raw;
+    if(clientNameMap[norm])return clientNameMap[norm];
+    // Try partial match against CONFIG keys
+    const match=Object.keys(CONFIG.clientChannels||{}).find(k=>
+      k.toLowerCase().replace(/[^a-z0-9]/g,"").includes(norm)||
+      norm.includes(k.toLowerCase().replace(/[^a-z0-9]/g,""))
+    );
+    if(match)return match;
+    return raw; // show raw name as last resort
   };
   const clients=[...new Set(tasks.map(t=>resolveClient(t.client,t.name)).filter(Boolean))];
 
@@ -921,10 +935,12 @@ function TeamDashboard({personId}){
                 : clients.map(c=>{
                     const dot=CLIENT_DOTS[CONFIG.activeClients?.indexOf(c)%CLIENT_DOTS.length]||B.sub;
                     return(
-                      <div key={c} style={{display:"flex",alignItems:"center",gap:6,background:B.pageBg,border:`1.5px solid ${B.border}`,borderRadius:20,padding:"5px 12px",fontSize:12,fontWeight:600,color:B.mid}}>
+                      <a key={c} href={clientDashboardURL(c)} target="_blank"
+                        style={{display:"flex",alignItems:"center",gap:6,background:B.pageBg,border:`1.5px solid ${B.border}`,borderRadius:20,padding:"5px 12px",fontSize:12,fontWeight:600,color:B.mid,textDecoration:"none",cursor:"pointer"}}>
                         <span style={{width:7,height:7,borderRadius:"50%",background:dot,flexShrink:0}}/>
                         {c}
-                      </div>
+                        <span style={{fontSize:10,color:B.purple}}>↗</span>
+                      </a>
                     );
                   })
               }
