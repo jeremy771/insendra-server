@@ -441,16 +441,12 @@ function buildStatusChangeDM(record, newStatus, person) {
         },
       ],
     },
-    {
-      color: "#6D4DF4",
-      blocks: [{ type: "context", elements: [{ type: "mrkdwn", text: `*insendra*   ·   Status update` }] }],
-    },
   ];
 
   return {
-    text: `${record.name} — ${newStatus}`,
+    text: `Status update — ${newStatus}`,
     blocks: [],
-    attachments,
+    attachments: [attachments[0]], // only the main card, no footer
   };
 }
 
