@@ -35,6 +35,28 @@ const CLIENT_DOTS=[B.purple,B.green,B.cyan,B.pink,"#8B5CF6"];
 const PROXY="https://insendra-server.onrender.com";
 const PRIORITY_COLOR={overdue:"#E53E3E",today:"#ED8936",soon:"#3182CE",later:"#38A169"};
 
+// ── EST date utilities ─────────────────────────────────────────
+const toEST=d=>{
+  // Returns a Date object adjusted to EST (UTC-5) / EDT (UTC-4) local equivalent
+  const s=typeof d==="string"?d:d instanceof Date?d.toISOString():String(d);
+  // For plain date strings "YYYY-MM-DD", treat as EST noon to avoid day shifts
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s.slice(0,10))){
+    const[y,mo,dy]=s.slice(0,10).split("-").map(Number);
+    return new Date(y,mo-1,dy,12,0,0);
+  }
+  return new Date(s);
+};
+const estKey=d=>{
+  const dt=toEST(d);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+};
+const estToday=()=>{
+  const now=new Date();
+  // Get current date in EST
+  const est=new Date(now.toLocaleString("en-US",{timeZone:"America/New_York"}));
+  return new Date(est.getFullYear(),est.getMonth(),est.getDate());
+};
+
 const CONFIG={
   atBaseUrl:"https://airtable.com/appdD2UGbFIfzkj7q/tbltj1I38yoAh2HOF",
   testUserId:"usrDi7oYvN51c0Z4H",
@@ -82,8 +104,9 @@ const CONFIG={
 
 function daysUntil(str){
   if(!str)return null;
-  const d=new Date(str);if(isNaN(d))return null;
-  const n=new Date();n.setHours(0,0,0,0);d.setHours(0,0,0,0);
+  const d=toEST(str);if(isNaN(d))return null;
+  const n=estToday();
+  d.setHours(12,0,0,0);
   return Math.round((d-n)/86400000);
 }
 function urgencyInfo(days){
@@ -187,7 +210,7 @@ function clientDashboardURL(clientSlug){
 }
 
 function buildDMMessage(person,tasks,weekly){
-  const date=new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+  const date=estToday().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
   const grouped={overdue:[],today:[],soon:[],later:[]};
 
   tasks.forEach(t=>{
@@ -440,7 +463,7 @@ function buildSynopsis(client, grouped){
 }
 
 function buildDigestMessage(client,items){
-  const date=new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+  const date=estToday().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
   const grouped={overdue:[],today:[],soon:[],later:[]};
 
   items.forEach(t=>{
@@ -786,7 +809,7 @@ function TeamDashboard({personId}){
   const clients=[...new Set(tasks.map(t=>{try{return resolveClient(t.client,t.name);}catch(e){return null;}}).filter(Boolean))];
 
   // Calendar — next 30 days with tasks
-  const today=new Date();
+  const today=estToday();
   const calDays=Array.from({length:30},(_,i)=>{
     const d=new Date(today);d.setDate(today.getDate()+i);
     return d;
@@ -794,10 +817,7 @@ function TeamDashboard({personId}){
   const tasksByDate={};
   tasks.filter(t=>t.urgencyDate).forEach(t=>{
     try{
-      const str=String(t.urgencyDate).slice(0,10);
-      const parts=str.split("-");
-      if(parts.length!==3)return;
-      const key=`${parts[0]}-${parts[1]}-${parts[2]}`;
+      const key=estKey(t.urgencyDate);
       tasksByDate[key]=tasksByDate[key]||[];
       tasksByDate[key].push(t);
     }catch(e){}
@@ -834,7 +854,7 @@ function TeamDashboard({personId}){
           <div style={{fontSize:22,fontWeight:700,color:B.text}}>{member.name}</div>
           <Chip color={rs.color} bg={rs.bg}>{member.role}</Chip>
         </div>
-        <div style={{marginLeft:"auto",fontSize:12,color:B.sub}}>{new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</div>
+        <div style={{marginLeft:"auto",fontSize:12,color:B.sub}}>{estToday().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</div>
       </div>
 
       {/* AI Summary */}
@@ -1089,11 +1109,11 @@ function ClientDashboard({clientName}){
   const sorted=[...deliverables].sort((a,b)=>new Date(a.sendDate||"9999")-new Date(b.sendDate||"9999"));
 
   // Calendar — next 60 days
-  const today=new Date();
+  const today=estToday();
   const calDays=Array.from({length:60},(_,i)=>{const d=new Date(today);d.setDate(today.getDate()+i);return d;});
   const sendsByDate={};
   deliverables.filter(d=>d.sendDate).forEach(d=>{
-    const key=d.sendDate.slice(0,10);
+    const key=estKey(d.sendDate);
     sendsByDate[key]=sendsByDate[key]||[];
     sendsByDate[key].push(d);
   });
@@ -1194,8 +1214,7 @@ function ClientDashboard({clientName}){
             // Fix sendsByDate to use local dates
             const sendsLocal={};
             deliverables.filter(d=>d.sendDate).forEach(d=>{
-              const parts=d.sendDate.slice(0,10).split("-");
-              const key=`${parts[0]}-${parts[1]}-${parts[2]}`;
+              const key=estKey(d.sendDate);
               sendsLocal[key]=sendsLocal[key]||[];
               sendsLocal[key].push(d);
             });
