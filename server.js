@@ -686,8 +686,7 @@ function buildTaskContext(records, userSlackId) {
   const byClient = {};
   records.forEach(r => { const c = r.client || "Unknown"; byClient[c] = byClient[c] || []; byClient[c].push(r); });
   Object.entries(byClient).forEach(([client, tasks]) => {
-    lines.push(`
-[${client}]`);
+    lines.push(`\n[${client}]`);
     tasks.forEach(r => {
       const days = daysUntilEST(r.sendDate);
       const daysStr = days === null ? "" : ` | Send: ${r.sendDate?.slice(0,10)}${days < 0 ? ` (${Math.abs(days)}d overdue)` : ` (${days}d)`}`;
@@ -697,8 +696,7 @@ function buildTaskContext(records, userSlackId) {
   });
 
   // Team workload summary
-  lines.push("
-=== Team Workload ===");
+  lines.push("\n=== Team Workload ===");
   Object.entries(TEAM).forEach(([id, member]) => {
     const owned = records.filter(r => {
       const sc = STATUS_ACTIONS[r.status];
