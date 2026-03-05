@@ -554,14 +554,8 @@ async function pollForStatusChanges() {
   }
 }
 
-// Start polling every 5 minutes
+// Start polling every 5 minutes (after server is listening)
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
-setTimeout(() => {
-  pollForStatusChanges(); // initial run after 30s startup delay
-  setInterval(pollForStatusChanges, POLL_INTERVAL_MS);
-}, 30000);
-
-console.log(`[poll] Status change polling started — every ${POLL_INTERVAL_MS / 60000} minutes`);
 
 
 // ── Slack Event Subscriptions ─────────────────────────────────────
@@ -724,4 +718,11 @@ app.get("/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "dashboard.html"));
 });
 
-app.listen(PORT, () => console.log(`Insendra server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Insendra server running on port ${PORT}`);
+  console.log(`[poll] Status change polling started — every ${POLL_INTERVAL_MS / 60000} minutes`);
+  setTimeout(() => {
+    pollForStatusChanges();
+    setInterval(pollForStatusChanges, POLL_INTERVAL_MS);
+  }, 30000);
+});
