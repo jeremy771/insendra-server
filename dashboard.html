@@ -462,11 +462,10 @@ Weekly Digest`},
         {type:"mrkdwn",text:`*${date}*
 ${total} active deliverable${total!==1?"s":""}`},
       ]},
-      {type:"actions",elements:[{
+      {type:"context",elements:[{
         type:"mrkdwn",
-          text:`<${clientDashboardURL(client)}|📋 View Client Dashboard>`
-        }]
-      }
+        text:`<${clientDashboardURL(client)}|📋 View Client Dashboard>`
+      }]}
     ]
   });
 
@@ -767,7 +766,7 @@ function TeamDashboard({personId}){
     if(match)return match;
     return raw; // show raw name as last resort
   };
-  const clients=[...new Set(tasks.map(t=>resolveClient(t.client,t.name)).filter(Boolean))];
+  const clients=[...new Set(tasks.map(t=>{try{return resolveClient(t.client,t.name);}catch(e){return null;}}).filter(Boolean))];
 
   // Calendar — next 30 days with tasks
   const today=new Date();
@@ -777,10 +776,14 @@ function TeamDashboard({personId}){
   });
   const tasksByDate={};
   tasks.filter(t=>t.urgencyDate).forEach(t=>{
-    const parts=t.urgencyDate.slice(0,10).split("-");
-    const key=`${parts[0]}-${parts[1]}-${parts[2]}`;
-    tasksByDate[key]=tasksByDate[key]||[];
-    tasksByDate[key].push(t);
+    try{
+      const str=String(t.urgencyDate).slice(0,10);
+      const parts=str.split("-");
+      if(parts.length!==3)return;
+      const key=`${parts[0]}-${parts[1]}-${parts[2]}`;
+      tasksByDate[key]=tasksByDate[key]||[];
+      tasksByDate[key].push(t);
+    }catch(e){}
   });
 
   // Perf stats
