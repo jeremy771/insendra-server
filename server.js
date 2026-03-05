@@ -562,6 +562,22 @@ const POLL_INTERVAL_MS = 5 * 60 * 1000;
 // ── Slack Event Subscriptions ─────────────────────────────────────
 const processedEvents = new Set();
 
+// Cache deliverables for 5 minutes to avoid fetching Airtable on every message
+let deliverableCache = null;
+let deliverableCacheTime = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+async function getCachedDeliverables() {
+  const now = Date.now();
+  if (deliverableCache && (now - deliverableCacheTime) < CACHE_TTL_MS) {
+    return deliverableCache;
+  }
+  const records = await fetchAllDeliverables();
+  deliverableCache = records;
+  deliverableCacheTime = now;
+  return records;
+}
+
 app.post("/slack/events", async (req, res) => {
   const body = req.body;
 
@@ -593,7 +609,7 @@ app.post("/slack/events", async (req, res) => {
   const personName = person?.name || "a team member";
 
   try {
-    const records = await fetchAllDeliverables();
+    const records = await getCachedDeliverables();
     const taskContext = buildTaskContext(records, userSlackId);
 
     const systemPrompt = `You are Insendra, an assistant for a marketing agency's task management system.
@@ -628,7 +644,10 @@ Guidelines:
     });
 
     const claudeData = await claudeRes.json();
-    const reply = claudeData.content?.[0]?.text || "Sorry, I couldn't process that. Try again.";
+    if (!claudeRes.ok || claudeData.error || !claudeData.content?.[0]?.text) {
+      console.error("[chat] Claude API error:", JSON.stringify(claudeData));
+    }
+    const reply = claudeData.content?.[0]?.text || "Sorry, I couldn\'t process that. Try again.";
 
     await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
