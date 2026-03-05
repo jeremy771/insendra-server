@@ -1007,6 +1007,7 @@ function ClientDashboard({clientName}){
   const[loading,setLoading]=useState(true);
   const[summary,setSummary]=useState("");
   const[summaryLoading,setSummaryLoading]=useState(false);
+  const[canonicalClient,setCanonicalClient]=useState(clientName);
 
   useEffect(()=>{
     (async()=>{
@@ -1030,7 +1031,8 @@ function ClientDashboard({clientName}){
           return fromName&&normalize(fromName)===normalize(clientName);
         });
         // Use first matched client name as canonical
-        const canonicalClient=items[0]?.client||clientName;
+        const resolved=items[0]?.client||clientName;
+        setCanonicalClient(resolved);
         setDeliverables(items);
 
         // Generate local client summary
