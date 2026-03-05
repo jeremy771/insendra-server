@@ -708,31 +708,15 @@ function TeamDashboard({personId}){
         setTasks(myTasks);
         setPerf((perfData.entries||[]).filter(e=>e.personId===personId));
 
-        // Generate AI summary
-        setSummaryLoading(true);
-        try{
-          const overdue=myTasks.filter(t=>t.days!==null&&t.days<0);
-          const soon=myTasks.filter(t=>t.days!==null&&t.days>=0&&t.days<=3);
-          const upcoming=myTasks.filter(t=>t.days!==null&&t.days>3);
-          const prompt=`You are Insendra, an email marketing workflow assistant. Write a short, friendly, motivating 2-3 sentence personal summary for ${me?.name||"this team member"} (${me?.role||"team member"}).
-Their current workload:
-- ${overdue.length} overdue tasks: ${overdue.slice(0,3).map(t=>t.name).join(", ")||"none"}
-- ${soon.length} due within 3 days: ${soon.slice(0,3).map(t=>t.name).join(", ")||"none"}  
-- ${upcoming.length} upcoming tasks
-Be specific, direct and encouraging. Max 3 sentences. No bullet points.`;
-          const res=await fetch("https://api.anthropic.com/v1/messages",{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({
-              model:"claude-sonnet-4-20250514",
-              max_tokens:150,
-              messages:[{role:"user",content:prompt}]
-            })
-          });
-          const aiData=await res.json();
-          setSummary(aiData.content?.[0]?.text||"");
-        }catch(e){console.warn("AI summary failed",e);}
-        setSummaryLoading(false);
+        // Generate local summary based on task counts
+        const ov=myTasks.filter(t=>t.days!==null&&t.days<0);
+        const sn=myTasks.filter(t=>t.days!==null&&t.days>=0&&t.days<=3);
+        const firstName=me?.name?.split(" ")[0]||"there";
+        let msg="";
+        if(ov.length>0) msg=`Hey ${firstName}, you have ${ov.length} overdue task${ov.length>1?"s":""} that need${ov.length===1?"s":""} immediate attention${sn.length>0?` and ${sn.length} more due within 3 days`:""}. Let's get those resolved first.`;
+        else if(sn.length>0) msg=`Hey ${firstName}, you're in good shape — no overdue tasks. You have ${sn.length} task${sn.length>1?"s":""} due within the next 3 days, so keep the momentum going.`;
+        else msg=`Hey ${firstName}, you're all caught up on urgent items! Take a look at your upcoming tasks below to stay ahead of the schedule.`;
+        setSummary(msg);
       }catch(e){console.error(e);}
       setLoading(false);
     })();
@@ -917,7 +901,7 @@ Be specific, direct and encouraging. Max 3 sentences. No bullet points.`;
               {clients.length===0
                 ? <div style={{color:B.sub,fontSize:12}}>No active clients</div>
                 : clients.map(c=>{
-                    const dot=CONFIG.clients.find(cl=>cl.name===c)?.color||B.sub;
+                    const dot=CLIENT_DOTS[CONFIG.activeClients?.indexOf(c)%CLIENT_DOTS.length]||B.sub;
                     return(
                       <div key={c} style={{display:"flex",alignItems:"center",gap:6,background:B.pageBg,border:`1.5px solid ${B.border}`,borderRadius:20,padding:"5px 12px",fontSize:12,fontWeight:600,color:B.mid}}>
                         <span style={{width:7,height:7,borderRadius:"50%",background:dot,flexShrink:0}}/>
@@ -982,25 +966,14 @@ function ClientDashboard({clientName}){
         const canonicalClient=items[0]?.client||clientName;
         setDeliverables(items);
 
-        // AI summary for client
-        setSummaryLoading(true);
-        try{
-          const statuses={};
-          items.forEach(d=>{statuses[d.status]=(statuses[d.status]||0)+1;});
-          const prompt=`You are Insendra, an email marketing workflow assistant. Write a short, professional 2-3 sentence status summary for the client "${clientName}".
-Active deliverables: ${items.length}
-Status breakdown: ${Object.entries(statuses).map(([k,v])=>`${v} in ${k}`).join(", ")}
-Upcoming sends: ${items.filter(d=>d.sendDate).slice(0,3).map(d=>`${d.name} on ${d.sendDate}`).join(", ")||"none"}
-Be reassuring, professional, specific. No bullet points. Max 3 sentences.`;
-          const r=await fetch("https://api.anthropic.com/v1/messages",{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:150,messages:[{role:"user",content:prompt}]})
-          });
-          const aiData=await r.json();
-          setSummary(aiData.content?.[0]?.text||"");
-        }catch(e){console.warn("AI summary failed",e);}
-        setSummaryLoading(false);
+        // Generate local client summary
+        const inProgress=items.filter(d=>!["Complete","Client Review","Upload","Schedule"].includes(d.status)).length;
+        const inReview=items.filter(d=>d.status==="Client Review").length;
+        const nextSend=items.filter(d=>d.sendDate).sort((a,b)=>new Date(a.sendDate)-new Date(b.sendDate))[0];
+        let clientMsg=`${canonicalClient||clientName} currently has ${items.length} active deliverable${items.length!==1?"s":""}.`;
+        if(inReview>0) clientMsg+=` ${inReview} item${inReview>1?"s are":` is`} awaiting your review.`;
+        if(nextSend) clientMsg+=` Next send: ${new Date(nextSend.sendDate).toLocaleDateString("en-US",{month:"long",day:"numeric"})}.`;
+        setSummary(clientMsg);
       }catch(e){console.error(e);}
       setLoading(false);
     })();
