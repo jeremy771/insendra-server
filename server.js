@@ -1,4 +1,5 @@
 const express    = require("express");
+const path       = require("path");
 const cors       = require("cors");
 const fs         = require("fs");
 
@@ -341,6 +342,11 @@ app.post("/backfill", async (req, res) => {
     console.error("/backfill error:", err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── GET /dashboard ───────────────────────────────────────────────
+app.get("/dashboard", (req, res) => {
+  res.sendFile(path.join(__dirname, "dashboard.html"));
 });
 
 app.listen(PORT, () => console.log(`Insendra server running on port ${PORT}`));
