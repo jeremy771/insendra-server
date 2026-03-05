@@ -730,18 +730,30 @@ function TeamDashboard({personId}){
   const soon=tasks.filter(t=>t.days!==null&&t.days>=0&&t.days<=3);
   const upcoming=tasks.filter(t=>t.days!==null&&t.days>3&&t.days<=14);
   const later=tasks.filter(t=>t.days!==null&&t.days>14);
-  // Filter out Airtable record IDs (e.g. recXXXXXXX) and map to display names
+  // Extract client from task name prefix e.g. [ELI] -> Eli Health, [C4C] -> Chandler 4 Corners
+  const prefixMap={
+    "ELI":"Eli Health","C4C":"Chandler 4 Corners","SG":"Safety Gear",
+    "FW":"Fore & Wharf","CAK":"CablesAndKits","CK":"CablesAndKits"
+  };
+  const clientFromName=name=>{
+    const m=name&&name.match(/^\[([A-Z0-9]+)\]/);
+    return m?prefixMap[m[1]]||null:null;
+  };
   const clientNameMap={};
   Object.keys(CONFIG.clientChannels||{}).forEach(name=>{
     clientNameMap[name.toLowerCase().replace(/[^a-z0-9]/g,"")]=name;
   });
-  const resolveClient=raw=>{
-    if(!raw)return null;
-    if(/^rec[A-Za-z0-9]{5,}$/.test(raw))return null;
+  const resolveClient=(raw,taskName)=>{
+    // Try task name prefix first (most reliable)
+    const fromName=clientFromName(taskName);
+    if(fromName)return fromName;
+    // Skip record IDs
+    if(!raw||/^rec[A-Za-z0-9]{5,}$/.test(raw))return null;
+    // Try normalizing against CONFIG
     const norm=raw.toLowerCase().replace(/[^a-z0-9]/g,"");
     return clientNameMap[norm]||raw;
   };
-  const clients=[...new Set(tasks.map(t=>resolveClient(t.client)).filter(Boolean))];
+  const clients=[...new Set(tasks.map(t=>resolveClient(t.client,t.name)).filter(Boolean))];
 
   // Calendar — next 30 days with tasks
   const today=new Date();
@@ -751,7 +763,8 @@ function TeamDashboard({personId}){
   });
   const tasksByDate={};
   tasks.filter(t=>t.urgencyDate).forEach(t=>{
-    const key=t.urgencyDate.slice(0,10);
+    const parts=t.urgencyDate.slice(0,10).split("-");
+    const key=`${parts[0]}-${parts[1]}-${parts[2]}`;
     tasksByDate[key]=tasksByDate[key]||[];
     tasksByDate[key].push(t);
   });
