@@ -646,12 +646,29 @@ async function previewDigest(log, setRunning){
   }catch(e){log({msg:`Airtable fetch failed: ${e.message}`,t:"err"});setRunning(false);return;}
 
   // Build digest for first client that has records, send to Jeremy
+  // Build prefix->client map for matching
+  const digestPrefixMap={
+    "ELI":"Eli Health","C4C":"Chandler 4 Corners","SG":"Safety Gear",
+    "FW":"Fore & Wharf","CAK":"CablesAndKits","CK":"CablesAndKits","CAB":"CablesAndKits"
+  };
+  const digestClientFromName=name=>{
+    const m=name&&name.match(/^\[([A-Z0-9]+)\]/);
+    return m?digestPrefixMap[m[1]]||null:null;
+  };
+  const normClientName=raw=>{
+    if(!raw)return null;
+    if(/^rec[A-Za-z0-9]{5,}$/.test(raw))return null;
+    const nr=raw.toLowerCase().replace(/[^a-z0-9]/g,"");
+    return CONFIG.activeClients.find(c=>c.toLowerCase().replace(/[^a-z0-9]/g,"")=== nr)||null;
+  };
   const byClient={};
   deliverables.forEach(d=>{
-    if(!CONFIG.activeClients.includes(d.client))return;
-    byClient[d.client]=byClient[d.client]||[];
+    // Resolve client name from task name prefix or raw client field
+    const clientKey=digestClientFromName(d.name)||normClientName(d.client);
+    if(!clientKey)return;
+    byClient[clientKey]=byClient[clientKey]||[];
     const sc=CONFIG.statusActions[d.status];
-    byClient[d.client].push({...d,days:daysUntil(d[sc?.urgencyField]||d.sendDate)});
+    byClient[clientKey].push({...d,days:daysUntil(d[sc?.urgencyField]||d.sendDate)});
   });
 
   for(const[client,items]of Object.entries(byClient)){
@@ -998,7 +1015,20 @@ function ClientDashboard({clientName}){
         const res=await fetch(`${PROXY}/deliverables`);
         const data=await res.json();
         const normalize=s=>(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
-        const items=(data.records||[]).filter(d=>normalize(d.client)===normalize(clientName));
+        // Match by normalized client name OR by task name prefix
+        const prefixMapCD={
+          "ELI":"Eli Health","C4C":"Chandler 4 Corners","SG":"Safety Gear",
+          "FW":"Fore & Wharf","CAK":"CablesAndKits","CK":"CablesAndKits","CAB":"CablesAndKits"
+        };
+        const clientFromTaskName=name=>{
+          const m=name&&name.match(/^\[([A-Z0-9]+)\]/);
+          return m?prefixMapCD[m[1]]||null:null;
+        };
+        const items=(data.records||[]).filter(d=>{
+          if(normalize(d.client)===normalize(clientName))return true;
+          const fromName=clientFromTaskName(d.name||"");
+          return fromName&&normalize(fromName)===normalize(clientName);
+        });
         // Use first matched client name as canonical
         const canonicalClient=items[0]?.client||clientName;
         setDeliverables(items);
