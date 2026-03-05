@@ -107,7 +107,9 @@ app.get("/deliverables", async (req, res) => {
       (data.records || []).forEach(r => {
         const f = r.fields;
         const upArr = getPpl(f["Uploader"]);
-        const client = Array.isArray(f["Client Name"]) ? f["Client Name"][0] : f["Client Name"] || "";
+        // Client Name is a linked record — try lookup fields for the display name
+        const clientRaw = f["Client"] || f["Client Name (from Clients)"] || f["Client Name (from Client)"] || f["Account Name"] || f["Client Name"] || "";
+        const client = Array.isArray(clientRaw) ? clientRaw[0] : clientRaw || "";
         if (!client) return;
         allRecords.push({
           id:             r.id,
@@ -343,6 +345,226 @@ app.post("/backfill", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+// ── Status Change Polling ─────────────────────────────────────────
+// Runs every 5 minutes, compares current Airtable statuses to snapshot,
+// sends a rich DM to the new task owner on any status change.
+
+const TEAM = {
+  "usrDi7oYvN51c0Z4H": { name: "Mariana Lara",       slackId: "U0AGYC9PNUR",  role: "manager"     },
+  "usrov3FwJAjCJQSKY": { name: "Laryssa Wirstiuk",   slackId: "U0A9ZBD7K9B",  role: "manager"     },
+  "usrP1mWmgGcgnCNTL": { name: "Jeremy Fleming",      slackId: "U070WRQ611D",  role: "manager"     },
+  "usrvcB8uzTmePkrwR": { name: "Rebecca O'Sullivan",  slackId: "U09863FSY72",  role: "copywriter"  },
+  "usreeW420YviThfXJ": { name: "Carly Reynolds",      slackId: "U09791NT6HZ",  role: "copywriter"  },
+  "usrEDbIfe8QXuzpfZ": { name: "Enrique",             slackId: "U09S1DRMWP5",  role: "designer"    },
+  "usr5ml09SqVwZl6A6": { name: "Kelvin Molina",       slackId: "U09LEGUPF2S",  role: "uploader"    },
+};
+
+const STATUS_ACTIONS = {
+  "Ready for Copy":                      { role: "copywriter", action: "Write copy",       urgencyField: "copyDeadline"   },
+  "Copywriting in Progress":             { role: "copywriter", action: "Finish copy",      urgencyField: "copyDeadline"   },
+  "Copywriting Complete - Ready for QA": { role: "manager",    action: "QA copy",          urgencyField: "copyDeadline"   },
+  "Ready For Design":                    { role: "designer",   action: "Start design",     urgencyField: "designDeadline" },
+  "Design in Progress":                  { role: "designer",   action: "Finish design",    urgencyField: "designDeadline" },
+  "Design Complete - Ready for QA":      { role: "manager",    action: "QA design",        urgencyField: "designDeadline" },
+  "Client Review":                       { role: "manager",    action: "Follow up",        urgencyField: "sendDate"       },
+  "Upload":                              { role: "uploader",   action: "Upload",           urgencyField: "uploadDeadline" },
+  "Schedule":                            { role: "uploader",   action: "Schedule send",    urgencyField: "uploadDeadline" },
+  "Revisions":                           { role: "designer",   action: "Make revisions",   urgencyField: "designDeadline" },
+};
+
+const AT_BASE_URL = "https://airtable.com/appdD2UGbFIfzkj7q/tbltj1I38yoAh2HOF";
+const PRIORITY_COLORS = {
+  overdue: "#E53E3E",
+  soon:    "#F59E0B",
+  later:   "#6D4DF4",
+};
+
+function daysUntilEST(str) {
+  if (!str) return null;
+  const parts = str.slice(0, 10).split("-").map(Number);
+  if (parts.length !== 3) return null;
+  const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((d - today) / 86400000);
+}
+
+function deadlineLabelSrv(days, dateStr) {
+  if (days === null) return null;
+  const d = new Date(dateStr + "T12:00:00");
+  const fmt = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (days < 0)  return `${fmt} (${Math.abs(days)}d overdue)`;
+  if (days === 0) return `${fmt} (today)`;
+  return `${fmt} (${days}d left)`;
+}
+
+function buildStatusChangeDM(record, newStatus, person) {
+  const sc = STATUS_ACTIONS[newStatus];
+  if (!sc) return null;
+
+  const urgencyDate = record[sc.urgencyField] || record.sendDate || null;
+  const days = daysUntilEST(urgencyDate);
+  const dl = urgencyDate ? deadlineLabelSrv(days, urgencyDate) : null;
+
+  const fieldLabel = {
+    copyDeadline: "Copy deadline", designDeadline: "Design deadline",
+    uploadDeadline: "Upload deadline", sendDate: "Send date",
+  }[sc.urgencyField] || "";
+
+  const dlStr = dl ? (fieldLabel ? `${fieldLabel}: ${dl}` : dl) : null;
+  const secondLine = [sc.action, dlStr].filter(Boolean).join("   ·   ");
+
+  const urgencyColor = days === null ? PRIORITY_COLORS.later
+    : days < 0  ? PRIORITY_COLORS.overdue
+    : days <= 3 ? PRIORITY_COLORS.soon
+    : PRIORITY_COLORS.later;
+
+  const firstName = person.name.split(" ")[0];
+  const headerText = `*${record.name}* has been assigned to you.`;
+  const subText = `Status changed to *${newStatus}*`;
+
+  const attachments = [
+    {
+      color: urgencyColor,
+      blocks: [
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: `${headerText}\n${subText}\n${secondLine}` },
+          accessory: {
+            type: "button",
+            text: { type: "plain_text", text: "Open Task", emoji: false },
+            url: `${AT_BASE_URL}/${record.id}`,
+            action_id: `open_${record.id}`,
+          },
+        },
+      ],
+    },
+    {
+      color: "#6D4DF4",
+      blocks: [{ type: "context", elements: [{ type: "mrkdwn", text: `*insendra*   ·   Status update` }] }],
+    },
+  ];
+
+  return {
+    text: `${record.name} — ${newStatus}`,
+    blocks: [],
+    attachments,
+  };
+}
+
+async function fetchAllDeliverables() {
+  const getDate = v => v ? (Array.isArray(v) ? v[0] : v) : null;
+  const getPpl  = v => {
+    if (!v) return [];
+    const arr = Array.isArray(v) ? v : [v];
+    return arr.map(p => typeof p === "object" ? { id: p.id || "", name: p.name || "" } : { id: p, name: p });
+  };
+  let allRecords = [], offset = null;
+  do {
+    const url = new URL(`https://api.airtable.com/v0/${AT_BASE}/${AT_TABLE}`);
+    url.searchParams.set("pageSize", "100");
+    if (offset) url.searchParams.set("offset", offset);
+    const atRes = await fetch(url.toString(), { headers: { Authorization: `Bearer ${AT_TOKEN}` } });
+    if (!atRes.ok) throw new Error(`Airtable error: ${atRes.status}`);
+    const data = await atRes.json();
+    const clientRaw = f => f["Client"] || f["Client Name (from Clients)"] || f["Client Name (from Client)"] || f["Client Name"] || "";
+    data.records.forEach(r => {
+      const f = r.fields;
+      allRecords.push({
+        id: r.id,
+        name: f["Deliverable Name"] || "",
+        status: f["Status"] || "",
+        client: Array.isArray(clientRaw(f)) ? clientRaw(f)[0] : clientRaw(f),
+        sendDate:       getDate(f["Send Date/Activation Date"]),
+        copyDeadline:   getDate(Object.entries(f).find(([k]) => k.includes("Copy Deadline"))?.[1]),
+        designDeadline: getDate(Object.entries(f).find(([k]) => k.includes("Design Deadline"))?.[1]),
+        uploadDeadline: getDate(Object.entries(f).find(([k]) => k.includes("Upload Deadline"))?.[1]),
+        manager:    getPpl(f["Manager"]),
+        copywriter: getPpl(f["Copywriter"]),
+        designer:   getPpl(f["Designer"]),
+        uploader:   getPpl(f["Uploader"]) [0] || null,
+      });
+    });
+    offset = data.offset || null;
+  } while (offset);
+  return allRecords;
+}
+
+async function sendDirectMessage(slackId, text, blocks, attachments) {
+  const body = { channel: slackId, text: text || " " };
+  if (blocks?.length)      body.blocks      = blocks;
+  if (attachments?.length) body.attachments = attachments;
+  await fetch("https://slack.com/api/chat.postMessage", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${SLACK_TOKEN}` },
+    body: JSON.stringify(body),
+  });
+}
+
+async function pollForStatusChanges() {
+  try {
+    console.log("[poll] Checking for status changes...");
+    const snapshot = readJSON(SNAPSHOT, {});
+    const records  = await fetchAllDeliverables();
+    const newSnap  = { ...snapshot };
+    let changeCount = 0;
+
+    for (const record of records) {
+      const prev = snapshot[record.id];
+      newSnap[record.id] = {
+        ...snapshot[record.id],
+        status: record.status,
+        name: record.name,
+      };
+
+      // Skip if no previous snapshot or status hasn't changed
+      if (!prev || prev.status === record.status) continue;
+
+      const sc = STATUS_ACTIONS[record.status];
+      if (!sc) continue;
+
+      // Find who owns this task now
+      let owners = [];
+      if (sc.role === "manager")    owners = record.manager    || [];
+      if (sc.role === "copywriter") owners = record.copywriter || [];
+      if (sc.role === "designer")   owners = record.designer   || [];
+      if (sc.role === "uploader")   owners = record.uploader ? [record.uploader] : [];
+
+      for (const owner of owners) {
+        const person = TEAM[owner.id];
+        if (!person) continue;
+
+        // Skip resend tasks for copywriters
+        if (sc.role === "copywriter" && /resend/i.test(record.name)) continue;
+
+        const dm = buildStatusChangeDM(record, record.status, person);
+        if (!dm) continue;
+
+        await sendDirectMessage(person.slackId, dm.text, dm.blocks, dm.attachments);
+        console.log(`[poll] Notified ${person.name} — "${record.name}" → ${record.status}`);
+        changeCount++;
+      }
+    }
+
+    // Save updated snapshot
+    writeJSON(SNAPSHOT, newSnap);
+    if (changeCount === 0) console.log("[poll] No changes detected.");
+    else console.log(`[poll] ${changeCount} notification(s) sent.`);
+  } catch (err) {
+    console.error("[poll] Error:", err.message);
+  }
+}
+
+// Start polling every 5 minutes
+const POLL_INTERVAL_MS = 5 * 60 * 1000;
+setTimeout(() => {
+  pollForStatusChanges(); // initial run after 30s startup delay
+  setInterval(pollForStatusChanges, POLL_INTERVAL_MS);
+}, 30000);
+
+console.log(`[poll] Status change polling started — every ${POLL_INTERVAL_MS / 60000} minutes`);
 
 // ── GET /dashboard ───────────────────────────────────────────────
 app.get("/dashboard", (req, res) => {
