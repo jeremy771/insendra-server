@@ -736,7 +736,18 @@ function TeamDashboard({personId}){
   const soon=tasks.filter(t=>t.days!==null&&t.days>=0&&t.days<=3);
   const upcoming=tasks.filter(t=>t.days!==null&&t.days>3&&t.days<=14);
   const later=tasks.filter(t=>t.days!==null&&t.days>14);
-  const clients=[...new Set(tasks.map(t=>t.client).filter(Boolean))];
+  // Map raw client values to display names using CONFIG.clientChannels
+  const clientNameMap={};
+  Object.keys(CONFIG.clientChannels||{}).forEach(name=>{
+    const norm=name.toLowerCase().replace(/[^a-z0-9]/g,"");
+    clientNameMap[norm]=name;
+  });
+  const resolveClient=raw=>{
+    if(!raw)return null;
+    const norm=raw.toLowerCase().replace(/[^a-z0-9]/g,"");
+    return clientNameMap[norm]||null; // null if it's a record ID with no match
+  };
+  const clients=[...new Set(tasks.map(t=>resolveClient(t.client)).filter(Boolean))];
 
   // Calendar — next 30 days with tasks
   const today=new Date();
@@ -744,9 +755,12 @@ function TeamDashboard({personId}){
     const d=new Date(today);d.setDate(today.getDate()+i);
     return d;
   });
+  const toKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   const tasksByDate={};
   tasks.filter(t=>t.urgencyDate).forEach(t=>{
-    const key=t.urgencyDate.slice(0,10);
+    // Normalize to local date string to avoid timezone shifting
+    const d=new Date(t.urgencyDate);
+    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
     tasksByDate[key]=tasksByDate[key]||[];
     tasksByDate[key].push(t);
   });
@@ -922,9 +936,9 @@ function TeamDashboard({personId}){
         </div>
         <div style={{padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
           {calDays.map(d=>{
-            const key=d.toISOString().slice(0,10);
+            const key=toKey(d);
             const dayTasks=tasksByDate[key]||[];
-            const isToday=key===today.toISOString().slice(0,10);
+            const isToday=key===toKey(today);
             const hasTasks=dayTasks.length>0;
             const hasOverdue=dayTasks.some(t=>t.days<0);
             const dotColor=hasOverdue?PRIORITY_COLOR.overdue:hasTasks?B.purple:"transparent";
