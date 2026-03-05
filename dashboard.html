@@ -222,33 +222,33 @@ function buildDMMessage(person,tasks,weekly){
   // ── Smart summary — specific, actionable, not generic ──────────
   const insights=[];
 
-  // 1. Overdue callouts — name the task and how long it's been overdue
-  grouped.overdue.forEach(t=>{
-    const staleDays=Math.abs(t.days);
-    const staleNote=staleDays>=7?` — *${staleDays} days with no progress*`:``;
-    insights.push(`*${t.name}* is overdue by ${staleDays}d${staleNote}. ${t.action} needs to happen now.`);
-  });
-
-  // 2. Stale tasks — sitting in same status too long (createdTime proxy)
-  [...grouped.today,...grouped.soon].forEach(t=>{
-    if(!t.createdTime)return;
-    const daysInStatus=Math.round((Date.now()-new Date(t.createdTime))/(86400000));
-    if(daysInStatus>=5){
-      insights.push(`*${t.name}* has been in "${t.status}" for ${daysInStatus} days — time to move this forward.`);
-    }
-  });
-
-  // 3. Client Review specifically — always worth flagging how long waiting
-  tasks.filter(t=>t.status==="Client Review"&&t.days!==null).forEach(t=>{
+  // 1. Stale tasks — use statusUpdated for accuracy, flag anything stuck ≥5 days
+  [...grouped.overdue,...grouped.today,...grouped.soon].forEach(t=>{
     const statusDate=t.statusUpdated||t.createdTime;
     if(!statusDate)return;
-    const waiting=Math.round((Date.now()-new Date(statusDate))/(86400000));
-    if(waiting>=3){
-      insights.push(`*${t.name}* has been with the client for ~${waiting} days — consider following up.`);
+    const daysStuck=Math.round((Date.now()-new Date(statusDate))/(86400000));
+    if(daysStuck>=5){
+      insights.push(`*${t.name}* has been in "${t.status}" for ${daysStuck} day${daysStuck!==1?"s":""} with no status change.`);
     }
   });
 
-  // 4. Actionable comments
+  // 2. Blocking others — for each task, check who is waiting on this person next
+  tasks.forEach(t=>{
+    const ns=CONFIG.nextStep?.[t.status];
+    if(!ns)return;
+    // Only flag if the *next* role is different from this person's role
+    if(ns.role===person.role.toLowerCase())return;
+    let blockedName="";
+    if(ns.role==="designer"  &&t.designer?.length)  blockedName=t.designer[0].name.split(" ")[0];
+    if(ns.role==="copywriter"&&t.copywriter?.length) blockedName=t.copywriter[0].name.split(" ")[0];
+    if(ns.role==="uploader"  &&t.uploader)           blockedName=t.uploader.name?.split(" ")[0]||"";
+    if(ns.role==="manager"   &&t.manager?.length)    blockedName=t.manager[0].name.split(" ")[0];
+    if(blockedName){
+      insights.push(`*${t.name}* — ${blockedName} is waiting to ${ns.action} once this is done.`);
+    }
+  });
+
+  // 3. Actionable comments
   tasks.filter(t=>t.comments&&t.comments.length>0).forEach(t=>{
     const latest=t.comments[0];
     const author=latest.author?.name?.split(" ")[0]||"Someone";
@@ -256,14 +256,14 @@ function buildDMMessage(person,tasks,weekly){
     insights.push(`*${t.name}* — ${author} commented: _"${msg}"_`);
   });
 
-  // 5. Closing line based on urgency
+  // 4. Closing line based on urgency
   let closingLine="";
   if(grouped.overdue.length===0&&grouped.today.length===0){
-    closingLine="No urgent deadlines today — stay ahead on what's coming up.";
+    closingLine="No urgent deadlines today.";
   } else if(grouped.overdue.length>0){
-    closingLine=`${grouped.overdue.length} item${grouped.overdue.length>1?"s":""} need${grouped.overdue.length===1?"s":""} immediate attention.`;
+    closingLine=`${grouped.overdue.length} item${grouped.overdue.length>1?"s":""} overdue.`;
   } else {
-    closingLine=`${grouped.today.length} item${grouped.today.length>1?"s":""} due within 3 days — prioritise these first.`;
+    closingLine=`${grouped.today.length} item${grouped.today.length>1?"s":""} due within 3 days.`;
   }
 
   const summaryText=insights.length>0
