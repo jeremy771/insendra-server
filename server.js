@@ -670,64 +670,47 @@ function buildTaskContext(records, userSlackId) {
   const lines = [];
   const person = Object.entries(TEAM).find(([, m]) => m.slackId === userSlackId)?.[1];
 
-  // Person's own tasks first
+  // Helper to get task owner IDs
+  const getOwners = r => {
+    const sc = STATUS_ACTIONS[r.status];
+    if (!sc) return [];
+    if (sc.role === "manager")    return r.manager    || [];
+    if (sc.role === "copywriter") return r.copywriter || [];
+    if (sc.role === "designer")   return r.designer   || [];
+    if (sc.role === "uploader")   return r.uploader ? [r.uploader] : [];
+    return [];
+  };
+
+  // Person's own tasks
   if (person) {
-    const myTasks = records.filter(r => {
-      const sc = STATUS_ACTIONS[r.status];
-      if (!sc) return false;
-      let owners = [];
-      if (sc.role === "manager")    owners = r.manager    || [];
-      if (sc.role === "copywriter") owners = r.copywriter || [];
-      if (sc.role === "designer")   owners = r.designer   || [];
-      if (sc.role === "uploader")   owners = r.uploader ? [r.uploader] : [];
-      return owners.some(o => o.id && TEAM[o.id]?.slackId === userSlackId);
-    });
+    const myTasks = records.filter(r => getOwners(r).some(o => o.id && TEAM[o.id]?.slackId === userSlackId));
     if (myTasks.length) {
-      lines.push(`=== ${person.name}'s Current Tasks ===`);
+      lines.push(`${person.name}'s tasks:`);
       myTasks.forEach(r => {
         const sc = STATUS_ACTIONS[r.status];
         const urgDate = r[sc?.urgencyField] || r.sendDate;
         const days = daysUntilEST(urgDate);
-        const daysStr = days === null ? "" : days < 0 ? ` (${Math.abs(days)}d OVERDUE)` : days === 0 ? " (due TODAY)" : ` (${days}d left)`;
-        lines.push(`- ${r.name} | ${r.status} | ${sc?.action || ""}${daysStr}`);
+        const daysStr = days === null ? "" : days < 0 ? ` (${Math.abs(days)}d OVERDUE)` : days === 0 ? " (TODAY)" : ` (${days}d)`;
+        lines.push(`  ${r.name} | ${r.status}${daysStr}`);
       });
       lines.push("");
     }
   }
 
-  // All active deliverables by client
-  lines.push("=== All Active Deliverables ===");
-  const byClient = {};
-  records.forEach(r => { const c = r.client || "Unknown"; byClient[c] = byClient[c] || []; byClient[c].push(r); });
-  Object.entries(byClient).forEach(([client, tasks]) => {
-    lines.push(`\n[${client}]`);
-    tasks.forEach(r => {
-      const days = daysUntilEST(r.sendDate);
-      const daysStr = days === null ? "" : ` | Send: ${r.sendDate?.slice(0,10)}${days < 0 ? ` (${Math.abs(days)}d overdue)` : ` (${days}d)`}`;
-      const people = [r.manager?.[0]?.name, r.copywriter?.[0]?.name, r.designer?.[0]?.name].filter(Boolean).join(", ");
-      lines.push(`- ${r.name} | ${r.status}${daysStr} | Team: ${people}`);
-    });
+  // All deliverables — compact one line each
+  lines.push("All deliverables:");
+  records.slice(0, 80).forEach(r => {
+    const days = daysUntilEST(r.sendDate);
+    const daysStr = days === null ? "" : ` send:${r.sendDate?.slice(0,10)}(${days < 0 ? days+"d" : "+"+days+"d"})`;
+    const owners = getOwners(r).map(o => o.name?.split(" ")[0]).filter(Boolean).join(",");
+    lines.push(`  ${r.name} | ${r.status}${daysStr} | ${owners}`);
   });
 
-  // Team workload summary
-  lines.push("\n=== Team Workload ===");
+  // Team summary
+  lines.push("\nTeam:");
   Object.entries(TEAM).forEach(([id, member]) => {
-    const owned = records.filter(r => {
-      const sc = STATUS_ACTIONS[r.status];
-      if (!sc) return false;
-      let owners = [];
-      if (sc.role === "manager")    owners = r.manager    || [];
-      if (sc.role === "copywriter") owners = r.copywriter || [];
-      if (sc.role === "designer")   owners = r.designer   || [];
-      if (sc.role === "uploader")   owners = r.uploader ? [r.uploader] : [];
-      return owners.some(o => o.id === id);
-    });
-    const overdue = owned.filter(r => {
-      const sc = STATUS_ACTIONS[r.status];
-      const d = daysUntilEST(r[sc?.urgencyField] || r.sendDate);
-      return d !== null && d < 0;
-    }).length;
-    lines.push(`- ${member.name} (${member.role}): ${owned.length} active tasks${overdue > 0 ? `, ${overdue} overdue` : ""}`);
+    const count = records.filter(r => getOwners(r).some(o => o.id === id)).length;
+    lines.push(`  ${member.name}: ${count} tasks`);
   });
 
   return lines.join("\n");
