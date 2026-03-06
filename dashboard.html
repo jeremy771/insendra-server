@@ -641,12 +641,27 @@ async function run(log,testMode=false){
   }
   if(weekly&&!testMode){
     log({msg:"Sending client digests...",t:"info"});
+    const wkPrefixMap={
+      "ELI":"Eli Health","C4C":"Chandler 4 Corners","SG":"Safety Gear",
+      "FW":"Fore & Wharf","CAK":"CablesAndKits","CK":"CablesAndKits","CAB":"CablesAndKits"
+    };
+    const wkClientFromName=name=>{
+      const m=name&&name.match(/^\[([A-Z0-9]+)\]/);
+      return m?wkPrefixMap[m[1]]||null:null;
+    };
+    const wkNormClient=raw=>{
+      if(!raw)return null;
+      if(/^rec[A-Za-z0-9]{5,}$/.test(raw))return null;
+      const nr=raw.toLowerCase().replace(/[^a-z0-9]/g,"");
+      return CONFIG.activeClients.find(c=>c.toLowerCase().replace(/[^a-z0-9]/g,"")=== nr)||null;
+    };
     const byClient={};
     deliverables.forEach(d=>{
-      if(!CONFIG.activeClients.includes(d.client))return;
-      byClient[d.client]=byClient[d.client]||[];
+      const clientKey=wkClientFromName(d.name)||wkNormClient(d.client);
+      if(!clientKey)return;
+      byClient[clientKey]=byClient[clientKey]||[];
       const sc=CONFIG.statusActions[d.status];
-      byClient[d.client].push({...d,days:daysUntil(d[sc?.urgencyField]||d.sendDate)});
+      byClient[clientKey].push({...d,days:daysUntil(d[sc?.urgencyField]||d.sendDate)});
     });
     for(const[client,items]of Object.entries(byClient)){
       const ch=CONFIG.clientChannels[client];if(!ch)continue;
@@ -1312,7 +1327,7 @@ function App(){
   const[summaryLoading,setSummaryLoading]=useState(false);
   const[running,setRunning]=useState(false);
   const[sched,setSched]=useState(false);
-  const[testMode,setTestMode]=useState(true);
+  const[testMode,setTestMode]=useState(false);
   const[cd,setCd]=useState("");
   const[nr,setNr]=useState(null);
   const[hist,setHist]=useState([]);
