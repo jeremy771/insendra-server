@@ -490,42 +490,40 @@ function buildStatusChangeDM(record, newStatus, person) {
   const fieldLabel = {
     copyDeadline: "Copy deadline", designDeadline: "Design deadline",
     uploadDeadline: "Upload deadline", sendDate: "Send date",
-  }[sc.urgencyField] || "";
-
-  const dlStr = dl ? (fieldLabel ? `${fieldLabel}: ${dl}` : dl) : null;
-  const secondLine = [sc.action, dlStr].filter(Boolean).join("   ·   ");
+  }[sc.urgencyField] || "Due";
 
   const urgencyColor = days === null ? PRIORITY_COLORS.later
     : days < 0  ? PRIORITY_COLORS.overdue
     : days <= 3 ? PRIORITY_COLORS.soon
     : PRIORITY_COLORS.later;
 
-  const firstName = person.name.split(" ")[0];
-  const headerText = `*${record.name}* has been assigned to you.`;
-  const subText = `Status changed to *${newStatus}*`;
-
-  const attachments = [
-    {
-      color: urgencyColor,
-      blocks: [
-        {
-          type: "section",
-          text: { type: "mrkdwn", text: `${headerText}\n${subText}\n${secondLine}` },
-          accessory: {
-            type: "button",
-            text: { type: "plain_text", text: "Open Task", emoji: false },
-            url: `${AT_BASE_URL}/${record.id}`,
-            action_id: `open_${record.id}`,
-          },
-        },
-      ],
-    },
-  ];
+  // Build stacked lines — each piece of info on its own line
+  const lines = [];
+  lines.push(`*${record.name}*`);
+  lines.push(`*${newStatus}*`);
+  lines.push(`Next: ${sc.action}`);
+  if (dl) lines.push(`${fieldLabel}: ${dl}`);
 
   return {
-    text: `Status update — ${newStatus}`,
+    text: record.name, // fallback plain text (no duplicate shown in UI)
     blocks: [],
-    attachments: [attachments[0]], // only the main card, no footer
+    attachments: [
+      {
+        color: urgencyColor,
+        blocks: [
+          {
+            type: "section",
+            text: { type: "mrkdwn", text: lines.join("\n") },
+            accessory: {
+              type: "button",
+              text: { type: "plain_text", text: "Open Task", emoji: false },
+              url: `${AT_BASE_URL}/${record.id}`,
+              action_id: `open_${record.id}`,
+            },
+          },
+        ],
+      },
+    ],
   };
 }
 
