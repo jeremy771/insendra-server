@@ -1509,6 +1509,32 @@ function App(){
                 {sched?"Stop Scheduler":"Start Scheduler"}
               </button>
             </div>
+            <div style={{marginTop:8}}>
+              <button onClick={async()=>{
+                const r=await fetch(`${PROXY}/run-dms-now`,{method:"POST"});
+                const d=await r.json();
+                alert(d.message||"Triggered — check Render logs");
+              }} style={{padding:"9px 16px",background:"#1E1B4B",color:"#FFF",border:"none",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'Lexend',sans-serif",width:"100%"}}>
+                ⚡ Trigger DMs Now (Server)
+              </button>
+            </div>
+            <div style={{marginTop:8}}>
+              {(()=>{
+                const[dmOn,setDmOn]=React.useState(true);
+                React.useEffect(()=>{
+                  fetch(`${PROXY}/dms-status`).then(r=>r.json()).then(d=>setDmOn(d.dmsEnabled)).catch(()=>{});
+                },[]);
+                return(
+                  <button onClick={async()=>{
+                    const r=await fetch(`${PROXY}/dms-toggle`,{method:"POST"});
+                    const d=await r.json();
+                    setDmOn(d.dmsEnabled);
+                  }} style={{padding:"9px 16px",background:dmOn?"#065F46":"#7F1D1D",color:"#FFF",border:"none",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'Lexend',sans-serif",width:"100%"}}>
+                    {dmOn?"🟢 DMs Enabled — Click to Pause":"🔴 DMs Paused — Click to Resume"}
+                  </button>
+                );
+              })()}
+            </div>
             <div style={{marginTop:12,padding:"11px 14px",background:testMode?"#FFFBEB":"#F7F6FF",borderRadius:9,border:`1.5px solid ${testMode?"#FDE68A":B.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{fontSize:12,fontWeight:600,color:testMode?"#B45309":B.mid}}>Test Mode</div>
