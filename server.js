@@ -8,8 +8,10 @@ const PORT       = process.env.PORT || 10000;
 const AT_TOKEN   = process.env.AT_TOKEN;
 const AT_BASE    = process.env.AT_BASE    || "appdD2UGbFIfzkj7q";
 const AT_TABLE   = process.env.AT_TABLE   || "tbltj1I38yoAh2HOF";
-const SLACK_TOKEN   = process.env.SLACK_TOKEN;
-const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY;
+const SLACK_TOKEN     = process.env.SLACK_TOKEN;
+const ANTHROPIC_KEY   = process.env.ANTHROPIC_KEY;
+const AT_TEAM_TABLE   = "tblVV58Gw8yq70NF0";
+const AT_CLIENT_TABLE = "tblCp6L6Ccpg9icak";
 
 app.use(cors());
 app.use(express.json());
@@ -17,6 +19,68 @@ app.use(express.json());
 // ── Helpers ──────────────────────────────────────────────────────
 const PERF_LOG = "./performance-log.json";
 const SNAPSHOT = "./status-snapshot.json";
+
+// ── Dynamic config (refreshed every 30 mins) ─────────────────────
+let dynamicTeam    = null; // { [atUserId]: { name, slackId, role } }
+let dynamicClients = null; // { [clientName]: { slackChannelId, prefix } }
+let configLoadedAt = 0;
+const CONFIG_TTL   = 30 * 60 * 1000;
+
+async function loadDynamicConfig() {
+  try {
+    // ── Fetch team ──────────────────────────────────────────────
+    const teamRes  = await fetch(
+      `https://api.airtable.com/v0/${AT_BASE}/${AT_TEAM_TABLE}?pageSize=100`,
+      { headers: { Authorization: `Bearer ${AT_TOKEN}` } }
+    );
+    const teamData = await teamRes.json();
+    const team = {};
+    (teamData.records || []).forEach(r => {
+      const f      = r.fields;
+      const atId   = f["Airtable User ID"];
+      const slackId = f["Slack ID"];
+      const role   = (f["Role"] || "").toLowerCase();
+      const name   = f["Name"] || "";
+      if (atId && slackId) team[atId] = { name, slackId, role };
+    });
+
+    // ── Fetch active clients ────────────────────────────────────
+    const clientRes  = await fetch(
+      `https://api.airtable.com/v0/${AT_BASE}/${AT_CLIENT_TABLE}?pageSize=100`,
+      { headers: { Authorization: `Bearer ${AT_TOKEN}` } }
+    );
+    const clientData = await clientRes.json();
+    const clients = {};
+    (clientData.records || []).forEach(r => {
+      const f      = r.fields;
+      const name   = f["Client Name"];
+      const status = Array.isArray(f["Relationship Status"])
+        ? f["Relationship Status"].map(s => typeof s === "object" ? s.name : s)
+        : [];
+      if (!name || !status.includes("Active")) return;
+      const slackChannelId = f["Slack Channel ID"] || null;
+      const prefix         = (f["Task Prefix"] || "").toUpperCase();
+      clients[name] = { slackChannelId, prefix };
+    });
+
+    dynamicTeam    = team;
+    dynamicClients = clients;
+    configLoadedAt = Date.now();
+    console.log(`[config] Loaded ${Object.keys(team).length} team members, ${Object.keys(clients).length} active clients`);
+  } catch (err) {
+    console.error("[config] Failed to load dynamic config:", err.message);
+  }
+}
+
+async function getTeam() {
+  if (!dynamicTeam || Date.now() - configLoadedAt > CONFIG_TTL) await loadDynamicConfig();
+  return dynamicTeam || {};
+}
+
+async function getClients() {
+  if (!dynamicClients || Date.now() - configLoadedAt > CONFIG_TTL) await loadDynamicConfig();
+  return dynamicClients || {};
+}
 
 function readJSON(path, fallback) {
   try { return JSON.parse(fs.readFileSync(path, "utf8")); }
@@ -375,7 +439,7 @@ const STATUS_ACTIONS = {
   "Revisions":                           { role: "designer",   action: "Make revisions",   urgencyField: "designDeadline" },
 };
 
-const AT_BASE_URL = "https://airtable.com/appdD2UGbFIfzkj7q/tbltj1I38yoAh2HOF";
+const AT_BASE_URL = `https://airtable.com/${AT_BASE}/tbltj1I38yoAh2HOF`;
 const PRIORITY_COLORS = {
   overdue: "#E53E3E",
   soon:    "#F59E0B",
@@ -509,6 +573,8 @@ async function pollForStatusChanges() {
     const newSnap  = { ...snapshot };
     let changeCount = 0;
 
+    const team = await getTeam();
+
     for (const record of records) {
       const prev = snapshot[record.id];
       newSnap[record.id] = {
@@ -531,7 +597,7 @@ async function pollForStatusChanges() {
       if (sc.role === "uploader")   owners = record.uploader ? [record.uploader] : [];
 
       for (const owner of owners) {
-        const person = TEAM[owner.id];
+        const person = team[owner.id];
         if (!person) continue;
 
         // Skip resend tasks for copywriters
@@ -605,12 +671,13 @@ app.post("/slack/events", async (req, res) => {
   const userMessage = (event.text || "").trim();
   if (!userMessage) return;
 
-  const person = Object.entries(TEAM).find(([, m]) => m.slackId === userSlackId)?.[1];
+  const team = await getTeam();
+  const person = Object.entries(team).find(([, m]) => m.slackId === userSlackId)?.[1];
   const personName = person?.name || "a team member";
 
   try {
     const records = await getCachedDeliverables();
-    const taskContext = buildTaskContext(records, userSlackId);
+    const taskContext = await buildTaskContext(records, userSlackId);
 
     const systemPrompt = `You are Insendra, an assistant for a marketing agency's task management system.
 You help team members understand their tasks, deadlines, and workflow.
@@ -666,9 +733,10 @@ Guidelines:
   }
 });
 
-function buildTaskContext(records, userSlackId) {
+async function buildTaskContext(records, userSlackId) {
+  const team = await getTeam();
   const lines = [];
-  const person = Object.entries(TEAM).find(([, m]) => m.slackId === userSlackId)?.[1];
+  const person = Object.entries(team).find(([, m]) => m.slackId === userSlackId)?.[1];
 
   // Helper to get task owner IDs
   const getOwners = r => {
@@ -683,7 +751,7 @@ function buildTaskContext(records, userSlackId) {
 
   // Person's own tasks
   if (person) {
-    const myTasks = records.filter(r => getOwners(r).some(o => o.id && TEAM[o.id]?.slackId === userSlackId));
+    const myTasks = records.filter(r => getOwners(r).some(o => o.id && team[o.id]?.slackId === userSlackId));
     if (myTasks.length) {
       lines.push(`${person.name}'s tasks:`);
       myTasks.forEach(r => {
@@ -708,13 +776,24 @@ function buildTaskContext(records, userSlackId) {
 
   // Team summary
   lines.push("\nTeam:");
-  Object.entries(TEAM).forEach(([id, member]) => {
+  Object.entries(team).forEach(([id, member]) => {
     const count = records.filter(r => getOwners(r).some(o => o.id === id)).length;
     lines.push(`  ${member.name}: ${count} tasks`);
   });
 
   return lines.join("\n");
 }
+
+// ── GET /config — dynamic team + clients ─────────────────────────
+app.get("/config", async (req, res) => {
+  try {
+    const team    = await getTeam();
+    const clients = await getClients();
+    res.json({ team, clients });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ── GET /dashboard ───────────────────────────────────────────────
 app.get("/dashboard", (req, res) => {
@@ -723,9 +802,14 @@ app.get("/dashboard", (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Insendra server running on port ${PORT}`);
-  console.log(`[poll] Status change polling started — every ${POLL_INTERVAL_MS / 60000} minutes`);
-  setTimeout(() => {
-    pollForStatusChanges();
-    setInterval(pollForStatusChanges, POLL_INTERVAL_MS);
-  }, 30000);
+  // Load dynamic config from Airtable on startup, then start polling
+  loadDynamicConfig().then(() => {
+    console.log(`[poll] Status change polling started — every ${POLL_INTERVAL_MS / 60000} minutes`);
+    setTimeout(() => {
+      pollForStatusChanges();
+      setInterval(pollForStatusChanges, POLL_INTERVAL_MS);
+    }, 30000);
+    // Refresh config every 30 minutes
+    setInterval(loadDynamicConfig, CONFIG_TTL);
+  });
 });
