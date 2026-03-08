@@ -816,16 +816,29 @@ app.get("/config", async (req, res) => {
 const SERVER_URL = "https://insendra-server.onrender.com";
 
 // Helper: EST today as Date object
+// Get current time broken into EST components — avoids locale string parsing bugs
+function estPartsSrv() {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map(p => [p.type, p.value]));
+  // Return a plain Date constructed from EST components (treated as local for arithmetic)
+  return new Date(
+    parseInt(parts.year), parseInt(parts.month) - 1, parseInt(parts.day),
+    parseInt(parts.hour), parseInt(parts.minute), parseInt(parts.second)
+  );
+}
+
 function estTodaySrv() {
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const est = estPartsSrv();
+  return new Date(est.getFullYear(), est.getMonth(), est.getDate());
 }
 
 // Helper: is today Monday (EST)?
-const isMondaySrv = () => {
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
-  return now.getDay() === 1;
-};
+const isMondaySrv = () => estPartsSrv().getDay() === 1;
 
 // Deadline label
 function deadlineLabelSched(days, dateStr){
@@ -1267,7 +1280,7 @@ async function runDailyDMs() {
 
 // Schedule daily run at 9AM EST Mon-Sat
 function scheduleNextDailyRun() {
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const now = estPartsSrv();
   const next = new Date(now);
   next.setHours(9, 0, 0, 0);
   // If 9AM already passed today, schedule for tomorrow
