@@ -103,6 +103,36 @@ const CONFIG={
   },
 };
 
+// ── Dynamic config loader ─────────────────────────────────────────
+async function loadRemoteConfig(){
+  try{
+    const PROXY=window.location.origin;
+    const res=await fetch(`${PROXY}/config`);
+    if(!res.ok)return;
+    const data=await res.json();
+    // Merge team — normalize roles to Title Case to match existing code
+    if(data.team){
+      Object.entries(data.team).forEach(([id,m])=>{
+        CONFIG.team[id]={
+          name:m.name,
+          slackId:m.slackId,
+          role:m.role.charAt(0).toUpperCase()+m.role.slice(1)
+        };
+      });
+    }
+    // Merge active clients + channels
+    if(data.clients){
+      CONFIG.activeClients=Object.keys(data.clients);
+      Object.entries(data.clients).forEach(([name,c])=>{
+        if(c.slackChannelId) CONFIG.clientChannels[name]=c.slackChannelId;
+      });
+    }
+    console.log("[config] Dynamic config loaded:",Object.keys(CONFIG.team).length,"team,",CONFIG.activeClients.length,"clients");
+  }catch(e){
+    console.warn("[config] Failed to load remote config, using defaults:",e.message);
+  }
+}
+
 function daysUntil(str){
   if(!str)return null;
   const d=toEST(str);if(isNaN(d))return null;
@@ -1311,6 +1341,9 @@ function ClientDashboard({clientName}){
 }
 
 function App(){
+  // Load dynamic team + client config from server on mount
+  React.useEffect(()=>{ loadRemoteConfig(); },[]);
+
   // ── URL routing ─────────────────────────────────────────────────
   // Support both ?user=ID and #user=ID (for local file access)
   const urlParams=new URLSearchParams(window.location.search||window.location.hash.replace("#","?"));
