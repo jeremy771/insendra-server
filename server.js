@@ -412,6 +412,19 @@ app.post("/backfill", async (req, res) => {
 });
 
 
+// ── DM On/Off Switch ─────────────────────────────────────────────
+let dmsEnabled = true;
+
+app.post("/dms-toggle", (req, res) => {
+  dmsEnabled = !dmsEnabled;
+  console.log(`[scheduler] DMs ${dmsEnabled ? "ENABLED" : "DISABLED"}`);
+  res.json({ ok: true, dmsEnabled });
+});
+
+app.get("/dms-status", (req, res) => {
+  res.json({ dmsEnabled });
+});
+
 // ── Status Change Polling ─────────────────────────────────────────
 // Runs every 5 minutes, compares current Airtable statuses to snapshot,
 // sends a rich DM to the new task owner on any status change.
@@ -795,6 +808,487 @@ app.get("/config", async (req, res) => {
   }
 });
 
+
+// ── Server-side Daily DM Scheduler ───────────────────────────────
+// Runs automatically every day at 9AM EST, Mon-Sat
+// Replaces the browser-based scheduler entirely
+
+const SERVER_URL = "https://insendra-server.onrender.com";
+
+// Helper: EST today as Date object
+function estTodaySrv() {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+// Helper: is today Monday (EST)?
+const isMondaySrv = () => {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  return now.getDay() === 1;
+};
+
+// Deadline label
+function deadlineLabelSched(days, dateStr){
+  if(days===null||!dateStr)return null;
+  const d=new Date(dateStr);
+  const dateFormatted=d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+  if(days<0)  return`Was due ${dateFormatted} (${Math.abs(days)}d ago)`;
+  if(days===0)return`Due today`;
+  return`Due ${dateFormatted} (${days}d left)`;
+}
+
+// Is actionable comment?
+function isActionable(text){
+  const t=text.toLowerCase();
+  return ["?","please","can you","could you","need","waiting","follow up",
+          "action","update","fix","change","revise","approve","review",
+          "feedback","asap","urgent","done?","ready?","status"].some(k=>t.includes(k));
+}
+
+// Assign tasks to team members by current owner role
+function assignTasks(deliverables){
+  const map={};
+  deliverables.forEach(d=>{
+    const sc=CONFIG.statusActions[d.status];if(!sc)return;
+    const{role,action,urgencyField}=sc;
+    let who=[];
+    if(role==="manager"   &&d.manager?.length)   who=d.manager;
+    if(role==="copywriter"&&d.copywriter?.length) who=d.copywriter;
+    if(role==="designer"  &&d.designer?.length)   who=d.designer;
+    if(role==="uploader"  &&d.uploader)           who=[d.uploader];
+    // Fallback chain: role-specific deadline → dueDate → sendDate
+    const urgencyDate=d[urgencyField] || d.dueDate || d.sendDate || null;
+    const resolvedUrgencyField=d[urgencyField] ? urgencyField
+      : d.dueDate ? "dueDate"
+      : d.sendDate ? "sendDate"
+      : urgencyField;
+    const days=daysUntil(urgencyDate);
+    // Skip resend tasks for copywriters
+    if(role==="copywriter" && /resend/i.test(d.name)) return;
+    who.forEach(p=>{
+      map[p.id]=map[p.id]||[];
+      map[p.id].push({id:d.id,name:d.name,client:d.client,action,days,sendDate:d.sendDate,urgencyField:resolvedUrgencyField,urgencyDate,status:d.status,createdTime:d.createdTime||null,statusUpdated:d.statusUpdated||null,manager:d.manager,designer:d.designer,copywriter:d.copywriter,uploader:d.uploader});
+    });
+  });
+  Object.values(map).forEach(arr=>arr.sort((a,b)=>(a.days??999)-(b.days??999)));
+  return map;
+}
+
+// Fetch comments for a record
+async function fetchRecordComments(recordId) {
+  try {
+    const url = `https://api.airtable.com/v0/${AT_BASE}/${AT_TABLE}/${recordId}/comments?pageSize=10`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${AT_TOKEN}` } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.comments || []).map(c => ({ text: c.text, author: c.author?.name || "" }));
+  } catch { return []; }
+}
+
+// Trigger a performance snapshot
+async function triggerSnapshotSrv() {
+  try { await fetch(`${SERVER_URL}/snapshot`, { method: "POST" }); } catch {}
+}
+
+// Build the rich DM message (ported from dashboard)
+function buildDMMessageSrv(person,tasks,weekly){
+  const date=estToday().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+  const grouped={overdue:[],today:[],soon:[],later:[]};
+
+  tasks.forEach(t=>{
+    // Skip tasks with no deadline
+    if(t.days===null)return;
+    const u=urgencyInfo(t.days);
+    grouped[u.section].push({...t,u});
+  });
+
+  const total=grouped.overdue.length+grouped.today.length+grouped.soon.length+grouped.later.length;
+  const attachments=[];
+
+  const sectionConfig=[
+    {key:"overdue",label:"OVERDUE",           color:PRIORITY_COLOR.overdue},
+    {key:"today",  label:"DUE SOON",          color:PRIORITY_COLOR.today},
+    {key:"soon",   label:"COMING UP",         color:PRIORITY_COLOR.soon},
+    {key:"later",  label:"UPCOMING",          color:PRIORITY_COLOR.later},
+  ];
+
+  // Header — simple, clean
+  attachments.push({
+    color:"#6D4DF4",
+    blocks:[{
+      type:"section",
+      fields:[
+        {type:"mrkdwn",text:`*${person.name}*\n${person.role}`},
+        {type:"mrkdwn",text:`*${date}*\n${total} task${total!==1?"s":""} today · <${`${SERVER_URL}/dashboard#user=${person.id}`}|📊 My Dashboard>`},
+      ]
+    }]
+  });
+
+  // ── Smart summary — specific, actionable, not generic ──────────
+  const insights=[];
+
+  // 1. Stale tasks — use statusUpdated for accuracy, flag anything stuck ≥5 days
+  [...grouped.overdue,...grouped.today,...grouped.soon].forEach(t=>{
+    const statusDate=t.statusUpdated||t.createdTime;
+    if(!statusDate)return;
+    const daysStuck=Math.round((Date.now()-new Date(statusDate))/(86400000));
+    if(daysStuck>=5){
+      insights.push(`*${t.name}* has been in "${t.status}" for ${daysStuck} day${daysStuck!==1?"s":""} with no status change.`);
+    }
+  });
+
+  // 2. Blocking others — for each task, check who is waiting on this person next
+  tasks.forEach(t=>{
+    const ns=CONFIG.nextStep?.[t.status];
+    if(!ns)return;
+    // Only flag if the *next* role is different from this person's role
+    if(ns.role===person.role.toLowerCase())return;
+    let blockedName="";
+    if(ns.role==="designer"  &&t.designer?.length)  blockedName=t.designer[0].name.split(" ")[0];
+    if(ns.role==="copywriter"&&t.copywriter?.length) blockedName=t.copywriter[0].name.split(" ")[0];
+    if(ns.role==="uploader"  &&t.uploader)           blockedName=t.uploader.name?.split(" ")[0]||"";
+    if(ns.role==="manager"   &&t.manager?.length)    blockedName=t.manager[0].name.split(" ")[0];
+    if(blockedName){
+      insights.push(`*${t.name}* — ${blockedName} is waiting to ${ns.action} once this is done.`);
+    }
+  });
+
+  // 3. Actionable comments
+  tasks.filter(t=>t.comments&&t.comments.length>0).forEach(t=>{
+    const latest=t.comments[0];
+    const author=latest.author?.name?.split(" ")[0]||"Someone";
+    const msg=(latest.text||"").slice(0,100);
+    insights.push(`*${t.name}* — ${author} commented: _"${msg}"_`);
+  });
+
+  // 4. Closing line based on urgency
+  let closingLine="";
+  if(grouped.overdue.length===0&&grouped.today.length===0){
+    closingLine="No urgent deadlines today.";
+  } else if(grouped.overdue.length>0){
+    closingLine=`${grouped.overdue.length} item${grouped.overdue.length>1?"s":""} overdue.`;
+  } else {
+    closingLine=`${grouped.today.length} item${grouped.today.length>1?"s":""} due within 3 days.`;
+  }
+
+  const summaryText=insights.length>0
+    ? insights.join("\n")+`\n\n${closingLine}`
+    : closingLine;
+
+  attachments.push({
+    color:"#6D4DF4",
+    blocks:[{type:"section",text:{type:"mrkdwn",text:summaryText}}]
+  });
+
+  if(total===0){
+    attachments.push({color:"#6D4DF4",blocks:[
+      {type:"context",elements:[{type:"mrkdwn",text:"*insendra*"}]}
+    ]});
+    return {blocks:[],attachments,text:`Task update for ${person.name}`};
+  }
+
+  sectionConfig.forEach(({key,label,color})=>{
+    const items=grouped[key];
+    if(!items.length)return;
+
+    // Section header + all tasks in ONE attachment = no gap between them
+    const sectionBlocks=[];
+    sectionBlocks.push({type:"section",text:{type:"mrkdwn",text:`*${label}*`}});
+    sectionBlocks.push({type:"divider"});
+
+    items.forEach((t,i)=>{
+      const dl=t.days!==null && t.urgencyDate
+        ? deadlineLabelSched(t.days, t.urgencyDate)
+        : null;
+
+      const dlFieldName={
+        copyDeadline:"Copy deadline",
+        designDeadline:"Design deadline",
+        uploadDeadline:"Upload deadline",
+        sendDate:"Send date",
+        dueDate:"",
+      }[t.urgencyField];
+
+      const dlFormatted=dl?(dlFieldName?`${dlFieldName}: ${dl}`:dl):null;
+      const secondLine=[t.action, dlFormatted].filter(Boolean).join("   ·   ");
+
+      // Next step
+      let nextStr="";
+      const ns=CONFIG.nextStep?.[t.status];
+      if(ns){
+        let nextPerson="";
+        if(ns.role==="designer"  &&t.designer?.length)  nextPerson=t.designer[0].name.split(" ")[0];
+        if(ns.role==="uploader"  &&t.uploader)          nextPerson=t.uploader.name.split(" ")[0];
+        if(ns.role==="manager"   &&t.manager?.length)   nextPerson=t.manager[0].name.split(" ")[0];
+        if(ns.role==="copywriter"&&t.copywriter?.length) nextPerson=t.copywriter[0].name.split(" ")[0];
+        nextStr=nextPerson ? `_Next: ${nextPerson} to ${ns.action}_` : `_Next: ${ns.action}_`;
+      }
+
+      // Actionable comments
+      let commentStr="";
+      if(t.comments&&t.comments.length){
+        const lines=t.comments.map(c=>{
+          const author=c.author?.name?.split(" ")[0]||"Someone";
+          const msg=(c.text||"").slice(0,120);
+          return `_${author}: "${msg}"_`;
+        });
+        commentStr=lines.join("\n");
+      }
+
+      const fullText=[
+        `*${t.name}*`,
+        secondLine,
+        nextStr||"",
+        commentStr ? `*Comments:*\n${commentStr}` : ""
+      ].filter(Boolean).join("\n");
+
+      sectionBlocks.push({
+        type:"section",
+        text:{type:"mrkdwn",text:fullText},
+        accessory:{
+          type:"button",
+          text:{type:"plain_text",text:"Open Task",emoji:false},
+          url:`${CONFIG.atBaseUrl}/${t.id}`,
+          action_id:`open_${t.id}`,
+        }
+      });
+      if(i<items.length-1) sectionBlocks.push({type:"divider"});
+    });
+
+    attachments.push({color, blocks:sectionBlocks});
+
+    // Thin spacer between sections
+    attachments.push({color:"#E2E2E2",blocks:[{type:"section",text:{type:"mrkdwn",text:" "}}]});
+  });
+
+  // Footer
+  attachments.push({
+    color:"#6D4DF4",
+    blocks:[{type:"context",elements:[{type:"mrkdwn",text:`*insendra*   ·   Reply in thread to flag an update`}]}]
+  });
+
+  return {blocks:[],attachments,text:`Task update for ${person.name}`};
+}
+
+// Build weekly client digest message (ported from dashboard)
+function buildDigestMessageSrv(client,items){
+  const date=estToday().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+  const grouped={overdue:[],today:[],soon:[],later:[]};
+
+  items.forEach(t=>{
+    if(t.days===null)return;
+    const u=urgencyInfo(t.days);
+    grouped[u.section].push({...t,u});
+  });
+
+  const total=grouped.overdue.length+grouped.today.length+grouped.soon.length+grouped.later.length;
+  const attachments=[];
+
+  // Header card
+  attachments.push({
+    color:"#6D4DF4",
+    blocks:[
+      {type:"section",fields:[
+        {type:"mrkdwn",text:`*${client}*
+Weekly Digest`},
+        {type:"mrkdwn",text:`*${date}*
+${total} active deliverable${total!==1?"s":""}`},
+      ]},
+      {type:"context",elements:[{
+        type:"mrkdwn",
+        text:`<${clientDashboardURL(client)}|📋 View Client Dashboard>`
+      }]}
+    ]
+  });
+
+  // Synopsis card
+  const synopsis=buildSynopsis(client,grouped);
+  if(synopsis){
+    attachments.push({
+      color:"#6D4DF4",
+      blocks:[{type:"section",text:{type:"mrkdwn",text:synopsis}}]
+    });
+  }
+
+  if(total===0){
+    attachments.push({color:"#6D4DF4",blocks:[
+      {type:"section",text:{type:"mrkdwn",text:"Nothing active right now."}},
+      {type:"context",elements:[{type:"mrkdwn",text:"*insendra*"}]}
+    ]});
+    return {blocks:[],attachments,text:`${client} — Weekly Digest`};
+  }
+
+  const sectionConfig=[
+    {key:"overdue",label:"OVERDUE",           color:PRIORITY_COLOR.overdue},
+    {key:"today",  label:"DUE SOON",          color:PRIORITY_COLOR.today},
+    {key:"soon",   label:"COMING UP",         color:PRIORITY_COLOR.soon},
+    {key:"later",  label:"UPCOMING",          color:PRIORITY_COLOR.later},
+  ];
+
+  sectionConfig.forEach(({key,label,color})=>{
+    const items=grouped[key];
+    if(!items.length)return;
+
+    const sectionBlocks=[];
+    sectionBlocks.push({type:"section",text:{type:"mrkdwn",text:`*${label}*`}});
+    sectionBlocks.push({type:"divider"});
+
+    items.forEach((t,i)=>{
+      const dl=t.days!==null && t.urgencyDate
+        ? deadlineLabelSched(t.days, t.urgencyDate)
+        : null;
+
+      // Next step
+      let nextStr="";
+      const ns=CONFIG.nextStep?.[t.status];
+      if(ns){
+        let nextPerson="";
+        if(ns.role==="designer"  &&t.designer?.length)  nextPerson=t.designer[0].name.split(" ")[0];
+        if(ns.role==="uploader"  &&t.uploader)          nextPerson=t.uploader.name.split(" ")[0];
+        if(ns.role==="manager"   &&t.manager?.length)   nextPerson=t.manager[0].name.split(" ")[0];
+        if(ns.role==="copywriter"&&t.copywriter?.length) nextPerson=t.copywriter[0].name.split(" ")[0];
+        nextStr=nextPerson?`_Next: ${nextPerson} to ${ns.action}_`:`_Next: ${ns.action}_`;
+      }
+
+      const sc=CONFIG.statusActions[t.status];
+      const action=sc?sc.action:"";
+      const secondLine=[action,dl].filter(Boolean).join("   ·   ");
+      const fullText=nextStr?`*${t.name}*
+${secondLine}
+${nextStr}`:`*${t.name}*
+${secondLine}`;
+
+      sectionBlocks.push({
+        type:"section",
+        text:{type:"mrkdwn",text:fullText},
+        accessory:{
+          type:"button",
+          text:{type:"plain_text",text:"Open Task",emoji:false},
+          url:`${CONFIG.atBaseUrl}/${t.id}`,
+          action_id:`open_${t.id}`,
+        }
+      });
+      if(i<items.length-1)sectionBlocks.push({type:"divider"});
+    });
+
+    attachments.push({color,blocks:sectionBlocks});
+    attachments.push({color:"#E2E2E2",blocks:[{type:"section",text:{type:"mrkdwn",text:" "}}]});
+  });
+
+  // Footer
+  attachments.push({color:"#6D4DF4",blocks:[{type:"context",elements:[{type:"mrkdwn",text:`*insendra*   ·   Reply in thread to flag an update`}]}]});
+
+  return {blocks:[],attachments,text:`${client} — Weekly Digest`};
+}
+
+// Send a Slack DM via the existing sendDirectMessage function (already defined above)
+
+// Main daily run — called by scheduler
+async function runDailyDMs() {
+  if (!dmsEnabled) {
+    console.log("[scheduler] DMs are disabled — skipping run");
+    return;
+  }
+  const weekly = isMondaySrv();
+  console.log(`[scheduler] Starting ${weekly ? "weekly" : "daily"} DM run...`);
+
+  try {
+    await triggerSnapshotSrv();
+
+    // Fetch all deliverables
+    const deliverables = await fetchAllDeliverables();
+    console.log(`[scheduler] Loaded ${deliverables.length} deliverables`);
+
+    // Assign tasks to team members
+    const tasks = assignTasks(deliverables);
+    console.log(`[scheduler] Assigned tasks to ${Object.keys(tasks).length} team members`);
+
+    // Fetch actionable comments for all tasks
+    const allTaskIds = [...new Set(Object.values(tasks).flat().map(t => t.id))];
+    const commentsMap = {};
+    await Promise.all(allTaskIds.map(async id => {
+      const comments = await fetchRecordComments(id);
+      const actionable = comments.filter(c => isActionable(c.text || ""));
+      if (actionable.length) commentsMap[id] = actionable;
+    }));
+
+    // Get dynamic team
+    const team = await getTeam();
+
+    // Send DMs to each team member
+    let sent = 0;
+    for (const [id, list] of Object.entries(tasks)) {
+      const member = team[id];
+      if (!member) continue;
+      const person = { ...member, id };
+      try {
+        const listWithComments = list.map(t => ({ ...t, comments: commentsMap[t.id] || [] }));
+        const { blocks, attachments, text } = buildDMMessageSrv(person, listWithComments, weekly);
+        await sendDirectMessage(member.slackId, text, blocks, attachments);
+        console.log(`[scheduler] Sent to ${member.name} — ${list.length} task(s)`);
+        sent++;
+      } catch (err) {
+        console.error(`[scheduler] Failed to send to ${member?.name}:`, err.message);
+      }
+    }
+
+    // Weekly client digests on Mondays
+    if (weekly) {
+      const clients = await getClients();
+      console.log(`[scheduler] Sending weekly digests to ${Object.keys(clients).length} clients...`);
+      for (const [clientName, clientConfig] of Object.entries(clients)) {
+        if (!clientConfig.slackChannelId) continue;
+        try {
+          const prefix = (clientConfig.prefix || "").toUpperCase();
+          const items = deliverables.filter(d => {
+            if (!d.name) return false;
+            const m = d.name.match(/^\[([A-Z0-9]+)\]/);
+            return m && m[1].toUpperCase() === prefix;
+          });
+          if (!items.length) continue;
+          const { blocks, attachments, text } = buildDigestMessageSrv(clientName, items);
+          await fetch("https://slack.com/api/chat.postMessage", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${SLACK_TOKEN}` },
+            body: JSON.stringify({ channel: clientConfig.slackChannelId, text, blocks, attachments }),
+          });
+          console.log(`[scheduler] Sent weekly digest for ${clientName}`);
+        } catch (err) {
+          console.error(`[scheduler] Digest failed for ${clientName}:`, err.message);
+        }
+      }
+    }
+
+    console.log(`[scheduler] Done — ${sent} DMs sent`);
+  } catch (err) {
+    console.error("[scheduler] Run failed:", err.message);
+  }
+}
+
+// Schedule daily run at 9AM EST Mon-Sat
+function scheduleNextDailyRun() {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const next = new Date(now);
+  next.setHours(9, 0, 0, 0);
+  // If 9AM already passed today, schedule for tomorrow
+  if (next <= now) next.setDate(next.getDate() + 1);
+  // Skip Sunday and Saturday
+  while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1);
+  const msUntil = next - now;
+  const hUntil = Math.round(msUntil / 3600000 * 10) / 10;
+  console.log(`[scheduler] Next DM run scheduled in ${hUntil}h (${next.toLocaleString("en-US", { timeZone: "America/New_York" })} EST)`);
+  setTimeout(async () => {
+    await runDailyDMs();
+    scheduleNextDailyRun(); // reschedule after each run
+  }, msUntil);
+}
+
+// ── POST /run-dms-now — manual trigger from admin dashboard ───────
+app.post("/run-dms-now", async (req, res) => {
+  res.json({ ok: true, message: "DM run triggered — check Render logs" });
+  await runDailyDMs();
+});
+
 // ── GET /dashboard ───────────────────────────────────────────────
 app.get("/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "dashboard.html"));
@@ -811,5 +1305,7 @@ app.listen(PORT, () => {
     }, 30000);
     // Refresh config every 30 minutes
     setInterval(loadDynamicConfig, CONFIG_TTL);
+    // Start daily DM scheduler
+    scheduleNextDailyRun();
   });
 });
