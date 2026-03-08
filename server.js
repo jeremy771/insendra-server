@@ -1289,7 +1289,8 @@ function scheduleNextDailyRun() {
   while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1);
   const msUntil = next - now;
   const hUntil = Math.round(msUntil / 3600000 * 10) / 10;
-  console.log(`[scheduler] Next DM run scheduled in ${hUntil}h (${next.toLocaleString("en-US", { timeZone: "America/New_York" })} EST)`);
+  const nextLabel = `${next.getMonth()+1}/${next.getDate()}/${next.getFullYear()}, ${next.getHours()}:00:00 AM`;
+  console.log(`[scheduler] Next DM run scheduled in ${hUntil}h (${nextLabel} EST)`);
   setTimeout(async () => {
     await runDailyDMs();
     scheduleNextDailyRun(); // reschedule after each run
