@@ -860,7 +860,7 @@ function isActionable(text){
 function assignTasks(deliverables){
   const map={};
   deliverables.forEach(d=>{
-    const sc=CONFIG.statusActions[d.status];if(!sc)return;
+    const sc=STATUS_ACTIONS[d.status];if(!sc)return;
     const{role,action,urgencyField}=sc;
     let who=[];
     if(role==="manager"   &&d.manager?.length)   who=d.manager;
@@ -950,7 +950,7 @@ function buildDMMessageSrv(person,tasks,weekly){
 
   // 2. Blocking others — for each task, check who is waiting on this person next
   tasks.forEach(t=>{
-    const ns=CONFIG.nextStep?.[t.status];
+    const ns=STATUS_ACTIONS?.[t.status];
     if(!ns)return;
     // Only flag if the *next* role is different from this person's role
     if(ns.role===person.role.toLowerCase())return;
@@ -1025,7 +1025,7 @@ function buildDMMessageSrv(person,tasks,weekly){
 
       // Next step
       let nextStr="";
-      const ns=CONFIG.nextStep?.[t.status];
+      const ns=STATUS_ACTIONS?.[t.status];
       if(ns){
         let nextPerson="";
         if(ns.role==="designer"  &&t.designer?.length)  nextPerson=t.designer[0].name.split(" ")[0];
@@ -1059,7 +1059,7 @@ function buildDMMessageSrv(person,tasks,weekly){
         accessory:{
           type:"button",
           text:{type:"plain_text",text:"Open Task",emoji:false},
-          url:`${CONFIG.atBaseUrl}/${t.id}`,
+          url:`${AT_BASE_URL}/${t.id}`,
           action_id:`open_${t.id}`,
         }
       });
@@ -1151,7 +1151,7 @@ ${total} active deliverable${total!==1?"s":""}`},
 
       // Next step
       let nextStr="";
-      const ns=CONFIG.nextStep?.[t.status];
+      const ns=STATUS_ACTIONS?.[t.status];
       if(ns){
         let nextPerson="";
         if(ns.role==="designer"  &&t.designer?.length)  nextPerson=t.designer[0].name.split(" ")[0];
@@ -1161,7 +1161,7 @@ ${total} active deliverable${total!==1?"s":""}`},
         nextStr=nextPerson?`_Next: ${nextPerson} to ${ns.action}_`:`_Next: ${ns.action}_`;
       }
 
-      const sc=CONFIG.statusActions[t.status];
+      const sc=STATUS_ACTIONS[t.status];
       const action=sc?sc.action:"";
       const secondLine=[action,dl].filter(Boolean).join("   ·   ");
       const fullText=nextStr?`*${t.name}*
@@ -1175,7 +1175,7 @@ ${secondLine}`;
         accessory:{
           type:"button",
           text:{type:"plain_text",text:"Open Task",emoji:false},
-          url:`${CONFIG.atBaseUrl}/${t.id}`,
+          url:`${AT_BASE_URL}/${t.id}`,
           action_id:`open_${t.id}`,
         }
       });
@@ -1277,22 +1277,42 @@ async function runDailyDMs() {
 }
 
 // Schedule daily run at 9AM EST Mon-Sat
-function scheduleNextDailyRun() {
+// Cron-style scheduler: checks every minute if it's time to run
+// More reliable than setTimeout chains across Render restarts
+let lastRunDate = null; // tracks the date (YYYY-MM-DD) of the last run
+
+function startDailyScheduler() {
+  console.log("[scheduler] Cron-style scheduler started — checking every minute for 9AM EST Mon-Fri");
+
+  setInterval(async () => {
+    const now = estPartsSrv();
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+    const day = now.getDay(); // 0=Sun, 6=Sat
+    const dateKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+
+    // Only run at 9:00 AM EST, Mon-Fri, and only once per day
+    if (hour === 9 && minute === 0 && day >= 1 && day <= 5 && lastRunDate !== dateKey) {
+      lastRunDate = dateKey;
+      console.log(`[scheduler] 9AM EST trigger fired (${dateKey})`);
+      await runDailyDMs();
+    }
+  }, 60 * 1000); // check every 60 seconds
+
+  // Log next scheduled run on startup
   const now = estPartsSrv();
   const next = new Date(now);
   next.setHours(9, 0, 0, 0);
-  // If 9AM already passed today, schedule for tomorrow
   if (next <= now) next.setDate(next.getDate() + 1);
-  // Skip Sunday and Saturday
   while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1);
-  const msUntil = next - now;
-  const hUntil = Math.round(msUntil / 3600000 * 10) / 10;
-  const nextLabel = `${next.getMonth()+1}/${next.getDate()}/${next.getFullYear()}, ${next.getHours()}:00:00 AM`;
-  console.log(`[scheduler] Next DM run scheduled in ${hUntil}h (${nextLabel} EST)`);
-  setTimeout(async () => {
-    await runDailyDMs();
-    scheduleNextDailyRun(); // reschedule after each run
-  }, msUntil);
+  const nextLabel = `${next.getMonth()+1}/${next.getDate()}/${next.getFullYear()}, 9:00:00 AM`;
+  const hUntil = Math.round((next - now) / 3600000 * 10) / 10;
+  console.log(`[scheduler] Next DM run in ~${hUntil}h (${nextLabel} EST)`);
+}
+
+// Keep old name as alias so app.listen call still works
+function scheduleNextDailyRun() {
+  startDailyScheduler();
 }
 
 // ── POST /run-dms-now — manual trigger from admin dashboard ───────
