@@ -158,9 +158,9 @@ function deadlineLabel(days, dateStr){
 }
 const isMonday=()=>new Date().getDay()===1;
 function nextRun(){
-  const d=new Date();d.setHours(14,0,0,0);
+  const d=new Date();d.setHours(9,0,0,0);
   if(d<=new Date())d.setDate(d.getDate()+1);
-  while(d.getDay()===0)d.setDate(d.getDate()+1);
+  while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1);
   return d;
 }
 function fmtCountdown(ms){
@@ -1456,7 +1456,7 @@ function App(){
       schRef.current=setTimeout(()=>{schRef.current=null;triggerRun(false).then(tick);},n-Date.now());
     };
     tick();
-    log({msg:"Scheduler started — Mon–Sat at 9:00 AM ET",t:"ok"});
+    log({msg:"Scheduler started — Mon–Fri at 9:00 AM ET",t:"ok"});
   };
   const stopSched=()=>{
     if(schRef.current)clearTimeout(schRef.current);
@@ -1546,9 +1546,9 @@ function App(){
             </div>
             {sched&&nr&&(
               <div style={{marginTop:10,padding:"11px 14px",background:B.pageBg,borderRadius:9,border:`1.5px solid ${B.border}`}}>
-                <div style={{fontSize:10,color:B.sub,marginBottom:3}}>Next run</div>
-                <div style={{fontSize:13,fontWeight:600}}>{nr.toLocaleString("en-US",{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</div>
-                <div style={{fontSize:13,color:B.purple,fontWeight:700,marginTop:3}}>{cd}</div>
+                <div style={{fontSize:10,color:B.sub,marginBottom:3}}>Server scheduler</div>
+                <div style={{fontSize:13,fontWeight:600}}>Mon–Fri at 9:00 AM EST</div>
+                <div style={{fontSize:11,color:B.sub,marginTop:3}}>Runs automatically on Render — no browser needed</div>
               </div>
             )}
           </Card>
