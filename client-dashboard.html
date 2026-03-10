@@ -206,7 +206,7 @@ const Th = ({col,cur,dir,onSort,children,right=false}) => (
   </th>
 );
 
-function CampaignTable({campaigns,hasRev}) {
+function CampaignTable({campaigns,hasRev,debug}) {
   const [col,setCol] = useState(hasRev?"revenue":"send_time");
   const [dir,setDir] = useState("desc");
   const onSort = c => { if(c===col)setDir(d=>d==="desc"?"asc":"desc"); else{setCol(c);setDir("desc");} };
@@ -218,8 +218,18 @@ function CampaignTable({campaigns,hasRev}) {
   }),[campaigns,col,dir]);
 
   if (!campaigns.length) return (
-    <div style={{padding:"40px",textAlign:"center",color:T.sub,fontSize:13}}>
-      No sent campaigns found — the API key may need full access permissions
+    <div style={{padding:"32px 24px",textAlign:"center",color:T.sub,fontSize:13}}>
+      <div style={{marginBottom:8}}>No sent campaigns found</div>
+      {debug && (
+        <div style={{display:"inline-block",textAlign:"left",padding:"10px 14px",
+          background:"#F8F7FF",border:`1px solid ${T.border}`,borderRadius:8,
+          fontSize:11,fontFamily:T.mono,lineHeight:1.9}}>
+          <div>Total campaigns in account: <b>{debug.all_campaign_count}</b></div>
+          <div>Statuses seen: <b>{debug.campaign_statuses?.join(", ")||"none"}</b></div>
+          <div>Conversion metric: <b>{debug.conv_metric_name||"none found"}</b></div>
+          <div>Flow stats rows: <b>{debug.flow_stats_rows}</b></div>
+        </div>
+      )}
     </div>
   );
   return (
@@ -498,7 +508,7 @@ function Dashboard({kData,insights,insLoad,onRefresh,clientLabel,onOut}) {
               </div>
             )}
           />
-          <CampaignTable campaigns={camps} hasRev={hasRev}/>
+          <CampaignTable campaigns={camps} hasRev={hasRev} debug={kData._debug}/>
         </Card>
 
         {/* Flows */}
