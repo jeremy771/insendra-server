@@ -2,464 +2,609 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='url(%23g)'/><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%236D4DF4'/><stop offset='1' stop-color='%2300C9B1'/></linearGradient></defs><text x='16' y='22' text-anchor='middle' font-family='sans-serif' font-size='18' font-weight='700' fill='white'>i</text></svg>"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Insendra — Client Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%236D4DF4'/><text x='16' y='22' text-anchor='middle' font-family='sans-serif' font-size='18' font-weight='700' fill='white'>i</text></svg>"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Lexend','Segoe UI',sans-serif;background:#F7F6FF;color:#160F2E;}
-::-webkit-scrollbar{width:4px;}
-::-webkit-scrollbar-track{background:#F7F6FF;}
-::-webkit-scrollbar-thumb{background:#E8E4FF;border-radius:2px;}
+body{font-family:'DM Sans','Segoe UI',sans-serif;background:#F0F1F7;color:#16122B;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:#DDDDE8;border-radius:2px;}
+table{border-spacing:0;}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect, useCallback, useRef, useMemo } = React;
+const PROXY = window.location.origin;
 
-// ── Config ────────────────────────────────────────────────────────
-const PROXY = window.location.origin; // uses same server — no hardcoding needed
-
-const B = {
-  purple:"#6D4DF4", green:"#15D197", cyan:"#17D3DD", pink:"#E44DF4",
-  white:"#FFFFFF", pageBg:"#F7F6FF", border:"#E8E4FF",
-  text:"#160F2E", sub:"#6C6A8A", mid:"#38305E",
-  red:"#E53E3E", orange:"#ED8936", blue:"#3182CE",
+const T = {
+  purple:"#6D4DF4",purpleL:"#EEE9FF",
+  green:"#00C48C",greenL:"#D6F7EE",
+  red:"#F04E55",redL:"#FEEAEB",
+  orange:"#F59E0B",orangeL:"#FEF3C7",
+  blue:"#3B82F6",blueL:"#DBEAFE",
+  text:"#16122B",mid:"#3F3A5A",sub:"#72748C",
+  white:"#FFFFFF",bg:"#F0F1F7",border:"#E4E4EF",
+  mono:"'DM Mono',monospace",
 };
 
-// ── Helpers ───────────────────────────────────────────────────────
-const fmt  = n => n == null ? "—" : n >= 1e6 ? (n/1e6).toFixed(1)+"M" : n >= 1e3 ? (n/1e3).toFixed(1)+"K" : String(Math.round(n));
-const pct  = n => n == null ? "—" : (n*100).toFixed(1)+"%";
-const fmtDate = s => { if(!s) return "—"; const d = new Date(s); return isNaN(d) ? "—" : d.toLocaleDateString("en-US",{month:"short",day:"numeric"}); };
+const $m = n => {
+  if (n==null||isNaN(n)) return "—";
+  if (n>=1e6) return `$${(n/1e6).toFixed(2)}M`;
+  if (n>=1e3) return `$${(n/1e3).toFixed(1)}K`;
+  return `$${Math.round(n).toLocaleString()}`;
+};
+const pct  = n => n==null?"—":`${(n*100).toFixed(1)}%`;
+const fnum = n => n==null?"—":n>=1e6?`${(n/1e6).toFixed(1)}M`:n>=1e3?`${(n/1e3).toFixed(1)}K`:Math.round(n).toLocaleString();
+const fdate= s => { if(!s) return "—"; try{return new Date(s).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"2-digit"})}catch{return "—"} };
+const fmon = s => { if(!s) return ""; try{const[y,m]=s.split("-");return new Date(+y,+m-1,1).toLocaleString("en-US",{month:"short",year:"2-digit"})}catch{return s} };
 
-// ── Data loaders ──────────────────────────────────────────────────
+const openC  = r => r==null?T.sub:r>=0.25?T.green:r>=0.15?T.orange:T.red;
+const clickC = r => r==null?T.sub:r>=0.02?T.green:r>=0.01?T.orange:T.red;
+
 async function loadKlaviyoData(klaviyoKey) {
-  const res = await fetch(`${PROXY}/klaviyo-data`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ klaviyoKey }),
+  const r = await fetch(`${PROXY}/klaviyo-data`,{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({klaviyoKey}),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || `Server error ${res.status}`);
-  return json;
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error||`Server error ${r.status}`);
+  return j;
 }
 
-async function loadInsights(kData) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1200,
-      system: "You are a senior email marketing strategist. Return ONLY a valid JSON array — no markdown, no prose, no explanation.",
-      messages: [{ role: "user", content:
-        `Analyze this Klaviyo account data and return exactly 5 actionable insights as a JSON array.\n\n${JSON.stringify(kData,null,2)}\n\nReturn:\n[{"type":"good"|"warn"|"info","emoji":"<single emoji>","title":"<short title>","body":"<2-3 sentences, specific and data-driven>"}]`
-      }],
-    }),
+async function loadInsights(d) {
+  const camps   = (d.campaigns||[]).filter(c=>c.open_rate!=null);
+  const topC    = [...(d.campaigns||[])].sort((a,b)=>(b.revenue||0)-(a.revenue||0)).slice(0,3);
+  const lowOpen = [...camps].sort((a,b)=>a.open_rate-b.open_rate).slice(0,3);
+  const flows   = d.flows||[];
+  const avgOpen = camps.length?camps.reduce((s,c)=>s+c.open_rate,0)/camps.length:null;
+  const cRev    = (d.campaigns||[]).reduce((s,c)=>s+(c.revenue||0),0);
+  const fRev    = flows.reduce((s,f)=>s+(f.revenue||0),0);
+
+  const prompt = `You are a senior Klaviyo email strategist. Analyze this account and return exactly 5 sharp insights as a JSON array.
+
+ACCOUNT: ${d.account?.name} | PERIOD: Last 12 months
+REVENUE: total=${$m(cRev+fRev)} campaigns=${$m(cRev)} flows=${$m(fRev)}
+AVG OPEN: ${avgOpen!=null?pct(avgOpen):"no data"} (benchmark 25-35%)
+CAMPAIGNS: ${(d.campaigns||[]).length} sent | LIVE FLOWS: ${flows.filter(f=>f.status==="live").length}
+AUDIENCES: ${d.list_count||0} lists, ${d.segment_count||0} segments
+
+TOP CAMPAIGNS BY REVENUE:
+${topC.map(c=>`  ${c.name}: ${$m(c.revenue)}, ${pct(c.open_rate)} open, ${pct(c.click_rate)} click`).join("\n")||"  No revenue data"}
+
+LOWEST OPEN CAMPAIGNS:
+${lowOpen.map(c=>`  ${c.name}: ${pct(c.open_rate)}`).join("\n")||"  No data"}
+
+FLOWS:
+${flows.map(f=>`  ${f.name} (${f.trigger_type||"?"}, ${f.status}): ${$m(f.revenue)}, ${pct(f.open_rate)} open, ${fnum(f.recipients)} recipients`).join("\n")||"  None"}
+
+Return ONLY JSON, no markdown:
+[{"type":"good"|"warn"|"info","emoji":"<emoji>","title":"<7 words max>","body":"<2 sentences, specific numbers, concrete next action>"}]`;
+
+  const r = await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,
+      system:"Return ONLY valid JSON arrays. No markdown. No prose.",
+      messages:[{role:"user",content:prompt}]}),
   });
-  if (!res.ok) throw new Error("Insights request failed");
-  const d = await res.json();
-  const raw = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+  if (!r.ok) throw new Error("AI request failed");
+  const data = await r.json();
+  const raw  = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
   return JSON.parse(raw.replace(/```json\s*/g,"").replace(/```\s*/g,"").trim());
 }
 
-// ── Shared components ─────────────────────────────────────────────
-const Card = ({children, style={}}) => (
-  <div style={{background:B.white,border:`1.5px solid ${B.border}`,borderRadius:14,padding:"18px 22px",...style}}>
+const Spin = ({s=20,c=T.purple}) => (
+  <span style={{display:"inline-block",width:s,height:s,border:`2px solid ${c}22`,
+    borderTopColor:c,borderRadius:"50%",animation:"spin .6s linear infinite"}}/>
+);
+
+const Card = ({children,style={}}) => (
+  <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,...style}}>
     {children}
   </div>
 );
 
-const Label = ({children}) => (
-  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.13em",textTransform:"uppercase",color:B.sub,marginBottom:11}}>
-    {children}
+const SectionHead = ({title,sub,right}) => (
+  <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.border}`,
+    display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+    <div>
+      <div style={{fontSize:13,fontWeight:700,color:T.text}}>{title}</div>
+      {sub&&<div style={{fontSize:11,color:T.sub,marginTop:2}}>{sub}</div>}
+    </div>
+    {right}
   </div>
 );
 
-const Spinner = ({size=20}) => {
-  const s = {
-    width:size, height:size,
-    border:`2px solid #E8E4FF`,
-    borderTopColor:B.purple,
-    borderRadius:"50%",
-    animation:"spin .65s linear infinite",
-    display:"inline-block",
-  };
-  return <span style={s}/>;
+const RatePill = ({val,type="open"}) => {
+  const c = type==="open"?openC(val):clickC(val);
+  return (
+    <span style={{fontSize:12,fontWeight:600,fontFamily:T.mono,padding:"2px 7px",
+      borderRadius:6,background:c===T.sub?"#F0F1F7":c+"18",color:c===T.sub?"#9394AB":c}}>
+      {pct(val)}
+    </span>
+  );
 };
 
-function PerfPill({rate}) {
-  if (rate == null) return <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#F0EFFF",color:B.sub}}>N/A</span>;
-  if (rate >= 0.25) return <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#DFFFED",color:"#0D7A45"}}>Strong</span>;
-  if (rate >= 0.15) return <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#FFF8E6",color:"#975A00"}}>Average</span>;
-  return <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#FFF0F0",color:B.red}}>Low</span>;
+function RevenueChart({monthly}) {
+  const ref = useRef(null);
+  const inst= useRef(null);
+  const has = monthly?.some(m=>m.revenue>0);
+
+  useEffect(()=>{
+    if (!ref.current||!has) return;
+    if (inst.current){inst.current.destroy();inst.current=null;}
+    const ctx  = ref.current.getContext("2d");
+    const grad = ctx.createLinearGradient(0,0,0,230);
+    grad.addColorStop(0,"rgba(109,77,244,0.14)");
+    grad.addColorStop(1,"rgba(109,77,244,0)");
+    inst.current = new window.Chart(ctx,{
+      type:"line",
+      data:{
+        labels:monthly.map(m=>fmon(m.month)),
+        datasets:[{
+          data:monthly.map(m=>+(m.revenue||0).toFixed(2)),
+          borderColor:T.purple,backgroundColor:grad,fill:true,tension:0.4,
+          pointRadius:4,pointHoverRadius:7,
+          pointBackgroundColor:T.white,pointBorderColor:T.purple,pointBorderWidth:2,
+          borderWidth:2.5,
+        }],
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{
+          legend:{display:false},
+          tooltip:{backgroundColor:T.text,padding:10,
+            titleFont:{family:"DM Sans",size:11},bodyFont:{family:"DM Mono",size:13},
+            callbacks:{
+              title:items=>fmon(monthly[items[0].dataIndex]?.month)||"",
+              label:c=>`  $${c.parsed.y.toLocaleString("en-US",{minimumFractionDigits:0})}`,
+            }}
+        },
+        scales:{
+          y:{beginAtZero:true,grid:{color:"rgba(0,0,0,0.04)"},border:{display:false},
+            ticks:{font:{family:"DM Mono",size:11},color:T.sub,
+              callback:v=>v>=1000?`$${Math.round(v/1000)}K`:`$${v}`}},
+          x:{grid:{display:false},border:{display:false},
+            ticks:{font:{family:"DM Sans",size:11},color:T.sub}},
+        }
+      }
+    });
+    return()=>{if(inst.current){inst.current.destroy();inst.current=null;}};
+  },[monthly,has]);
+
+  if (!has) return (
+    <div style={{height:200,display:"flex",flexDirection:"column",alignItems:"center",
+      justifyContent:"center",color:T.sub,gap:8}}>
+      <div style={{fontSize:28}}>📊</div>
+      <div style={{fontSize:13,fontWeight:600,color:T.mid}}>Revenue tracking unavailable</div>
+      <div style={{fontSize:12,maxWidth:260,textAlign:"center",lineHeight:1.6}}>
+        Add a <strong>Placed Order</strong> metric in Klaviyo to enable revenue reporting
+      </div>
+    </div>
+  );
+  return <div style={{position:"relative",height:230}}><canvas ref={ref}/></div>;
 }
 
-// ── Login screen ──────────────────────────────────────────────────
-function LoginScreen({onConnect, error, loading}) {
-  const [key,   setKey]   = useState("");
-  const [label, setLabel] = useState("");
+const Th = ({col,cur,dir,onSort,children,right=false}) => (
+  <th onClick={()=>onSort(col)} style={{
+    padding:"9px 14px",fontSize:10,fontWeight:700,letterSpacing:"0.08em",
+    textTransform:"uppercase",cursor:"pointer",userSelect:"none",whiteSpace:"nowrap",
+    textAlign:right?"right":"left",borderBottom:`1px solid ${T.border}`,
+    color:cur===col?T.purple:T.sub,background:"#FAFAFD",
+  }}>
+    {children}{cur===col?(dir==="asc"?" ↑":" ↓"):""}
+  </th>
+);
 
+function CampaignTable({campaigns,hasRev}) {
+  const [col,setCol] = useState(hasRev?"revenue":"send_time");
+  const [dir,setDir] = useState("desc");
+  const onSort = c => { if(c===col)setDir(d=>d==="desc"?"asc":"desc"); else{setCol(c);setDir("desc");} };
+  const rows = useMemo(()=>[...campaigns].sort((a,b)=>{
+    const av=a[col],bv=b[col];
+    if(av==null)return dir==="desc"?1:-1; if(bv==null)return dir==="desc"?-1:1;
+    if(typeof av==="string")return dir==="desc"?bv.localeCompare(av):av.localeCompare(bv);
+    return dir==="desc"?bv-av:av-bv;
+  }),[campaigns,col,dir]);
+
+  if (!campaigns.length) return (
+    <div style={{padding:"40px",textAlign:"center",color:T.sub,fontSize:13}}>
+      No sent campaigns found — the API key may need full access permissions
+    </div>
+  );
   return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"2rem",
-      background:`radial-gradient(ellipse 70% 50% at 50% -5%, #EDE9FF 0%, ${B.pageBg} 65%)`}}>
-      <div style={{width:"100%",maxWidth:420,background:B.white,border:`1.5px solid ${B.border}`,
-        borderRadius:20,padding:"2.8rem 2.5rem",
-        boxShadow:"0 40px 80px rgba(109,77,244,0.10), 0 0 0 1px rgba(109,77,244,0.06)"}}>
+    <div style={{overflowX:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <thead><tr>
+          <Th col="name"             cur={col} dir={dir} onSort={onSort}>Campaign</Th>
+          <Th col="send_time"        cur={col} dir={dir} onSort={onSort}>Sent</Th>
+          <Th col="recipients"       cur={col} dir={dir} onSort={onSort} right>Recipients</Th>
+          <Th col="open_rate"        cur={col} dir={dir} onSort={onSort} right>Open %</Th>
+          <Th col="click_rate"       cur={col} dir={dir} onSort={onSort} right>Click %</Th>
+          <Th col="unsubscribe_rate" cur={col} dir={dir} onSort={onSort} right>Unsub %</Th>
+          {hasRev&&<Th col="revenue"     cur={col} dir={dir} onSort={onSort} right>Revenue</Th>}
+          {hasRev&&<Th col="rpr"         cur={col} dir={dir} onSort={onSort} right>RPR</Th>}
+          {hasRev&&<Th col="conversions" cur={col} dir={dir} onSort={onSort} right>Convs</Th>}
+        </tr></thead>
+        <tbody>
+          {rows.map((c,i)=>(
+            <tr key={c.id} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.white:"#FBFBFE"}}>
+              <td style={{padding:"10px 14px",maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",
+                whiteSpace:"nowrap",fontSize:13,fontWeight:500}} title={c.name}>{c.name}</td>
+              <td style={{padding:"10px 14px",fontSize:12,color:T.sub,whiteSpace:"nowrap"}}>{fdate(c.send_time)}</td>
+              <td style={{padding:"10px 14px",fontSize:12,fontFamily:T.mono,textAlign:"right"}}>{fnum(c.recipients)}</td>
+              <td style={{padding:"10px 14px",textAlign:"right"}}><RatePill val={c.open_rate} type="open"/></td>
+              <td style={{padding:"10px 14px",textAlign:"right"}}><RatePill val={c.click_rate} type="click"/></td>
+              <td style={{padding:"10px 14px",fontSize:12,fontFamily:T.mono,textAlign:"right",
+                color:c.unsubscribe_rate>0.002?T.red:T.sub}}>{pct(c.unsubscribe_rate)}</td>
+              {hasRev&&<td style={{padding:"10px 14px",fontSize:13,fontWeight:600,fontFamily:T.mono,
+                textAlign:"right",color:c.revenue?T.text:T.sub}}>{$m(c.revenue)}</td>}
+              {hasRev&&<td style={{padding:"10px 14px",fontSize:12,fontFamily:T.mono,
+                textAlign:"right",color:T.sub}}>{c.rpr!=null?`$${c.rpr.toFixed(2)}`:"—"}</td>}
+              {hasRev&&<td style={{padding:"10px 14px",fontSize:12,fontFamily:T.mono,
+                textAlign:"right"}}>{fnum(c.conversions)}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-        {/* Logo */}
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-          <div style={{width:32,height:32,borderRadius:8,background:`linear-gradient(135deg,${B.purple},${B.cyan})`,
-            display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{color:"#fff",fontSize:16,fontWeight:700}}>i</span>
-          </div>
-          <span style={{fontWeight:700,fontSize:16,letterSpacing:"-0.02em"}}>insendra</span>
-        </div>
-        <div style={{fontSize:13,color:B.sub,marginBottom:28}}>Client Intelligence Dashboard</div>
+function FlowTable({flows,hasRev}) {
+  const [col,setCol] = useState(hasRev?"revenue":"recipients");
+  const [dir,setDir] = useState("desc");
+  const onSort = c => { if(c===col)setDir(d=>d==="desc"?"asc":"desc"); else{setCol(c);setDir("desc");} };
+  const rows = useMemo(()=>[...flows].sort((a,b)=>{
+    const av=a[col],bv=b[col];
+    if(av==null)return dir==="desc"?1:-1; if(bv==null)return dir==="desc"?-1:1;
+    if(typeof av==="string")return dir==="desc"?bv.localeCompare(av):av.localeCompare(bv);
+    return dir==="desc"?bv-av:av-bv;
+  }),[flows,col,dir]);
 
-        {/* Client name */}
-        <div style={{marginBottom:16}}>
-          <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:B.sub,marginBottom:6}}>
-            Client Name <span style={{textTransform:"none",letterSpacing:0,fontWeight:400}}>(optional)</span>
-          </div>
-          <input
-            style={{width:"100%",background:B.pageBg,border:`1.5px solid ${B.border}`,borderRadius:9,
-              padding:"10px 14px",color:B.text,fontFamily:"'Lexend',sans-serif",fontSize:13,outline:"none"}}
-            placeholder="e.g. Acme Brands"
-            value={label}
-            onChange={e=>setLabel(e.target.value)}
-          />
-        </div>
+  if (!flows.length) return (
+    <div style={{padding:"40px",textAlign:"center",color:T.sub,fontSize:13}}>No flows found.</div>
+  );
+  return (
+    <div style={{overflowX:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <thead><tr>
+          <Th col="name"         cur={col} dir={dir} onSort={onSort}>Flow</Th>
+          <Th col="trigger_type" cur={col} dir={dir} onSort={onSort}>Trigger</Th>
+          <Th col="status"       cur={col} dir={dir} onSort={onSort}>Status</Th>
+          <Th col="recipients"   cur={col} dir={dir} onSort={onSort} right>Recipients</Th>
+          <Th col="open_rate"    cur={col} dir={dir} onSort={onSort} right>Open %</Th>
+          <Th col="click_rate"   cur={col} dir={dir} onSort={onSort} right>Click %</Th>
+          {hasRev&&<Th col="revenue"     cur={col} dir={dir} onSort={onSort} right>Revenue</Th>}
+          {hasRev&&<Th col="rpr"         cur={col} dir={dir} onSort={onSort} right>RPR</Th>}
+          {hasRev&&<Th col="conversions" cur={col} dir={dir} onSort={onSort} right>Convs</Th>}
+        </tr></thead>
+        <tbody>
+          {rows.map((f,i)=>{
+            const sc={live:[T.greenL,T.green],draft:["#F3F4F8",T.sub],manual:[T.orangeL,T.orange]};
+            const [bg,fc]=sc[f.status]||["#F3F4F8",T.sub];
+            return (
+              <tr key={f.id} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.white:"#FBFBFE"}}>
+                <td style={{padding:"10px 14px",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",
+                  whiteSpace:"nowrap",fontSize:13,fontWeight:500}} title={f.name}>{f.name}</td>
+                <td style={{padding:"10px 14px"}}>
+                  <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,
+                    background:T.blueL,color:T.blue}}>{f.trigger_type||"—"}</span>
+                </td>
+                <td style={{padding:"10px 14px"}}>
+                  <span style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:12,fontWeight:500}}>
+                    <span style={{width:6,height:6,borderRadius:"50%",background:fc}}/>
+                    {f.status}
+                  </span>
+                </td>
+                <td style={{padding:"10px 14px",fontSize:12,fontFamily:T.mono,textAlign:"right"}}>{fnum(f.recipients)}</td>
+                <td style={{padding:"10px 14px",textAlign:"right"}}><RatePill val={f.open_rate} type="open"/></td>
+                <td style={{padding:"10px 14px",textAlign:"right"}}><RatePill val={f.click_rate} type="click"/></td>
+                {hasRev&&<td style={{padding:"10px 14px",fontSize:13,fontWeight:600,fontFamily:T.mono,
+                  textAlign:"right",color:f.revenue?T.text:T.sub}}>{$m(f.revenue)}</td>}
+                {hasRev&&<td style={{padding:"10px 14px",fontSize:12,fontFamily:T.mono,
+                  textAlign:"right",color:T.sub}}>{f.rpr!=null?`$${f.rpr.toFixed(2)}`:"—"}</td>}
+                {hasRev&&<td style={{padding:"10px 14px",fontSize:12,fontFamily:T.mono,
+                  textAlign:"right"}}>{fnum(f.conversions)}</td>}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-        {/* API key */}
-        <div style={{marginBottom:22}}>
-          <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:B.sub,marginBottom:6}}>
-            Klaviyo Private API Key
+function Login({onConnect,err,loading}) {
+  const [key,setKey]   = useState("");
+  const [name,setName] = useState("");
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",
+      padding:"2rem",background:T.bg}}>
+      <div style={{width:"100%",maxWidth:400,animation:"fadeUp .4s ease"}}>
+        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:20,
+          padding:"2.6rem 2.4rem",boxShadow:"0 24px 64px rgba(109,77,244,0.10)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+            <div style={{width:34,height:34,borderRadius:9,
+              background:"linear-gradient(135deg,#6D4DF4 0%,#00C9B1 100%)",
+              display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{color:"#fff",fontSize:17,fontWeight:700,fontFamily:"DM Mono"}}>i</span>
+            </div>
+            <span style={{fontWeight:700,fontSize:16,letterSpacing:"-0.03em"}}>insendra</span>
           </div>
-          <input
-            type="password"
-            style={{width:"100%",background:B.pageBg,border:`1.5px solid ${B.border}`,borderRadius:9,
-              padding:"10px 14px",color:B.text,fontFamily:"'Lexend',sans-serif",fontSize:13,outline:"none"}}
-            placeholder="pk_••••••••••••••••••••••••"
-            value={key}
-            onChange={e=>setKey(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&key.trim()&&onConnect(key.trim(),label)}
-          />
-          <div style={{fontSize:11,color:B.sub,marginTop:6}}>
+          <div style={{fontSize:13,color:T.sub,marginBottom:28}}>Client Intelligence Dashboard</div>
+          {[
+            {label:"Client name",hint:"optional",val:name,set:setName,type:"text",ph:"e.g. Chandler Four Corners"},
+            {label:"Klaviyo Private API Key",hint:null,val:key,set:setKey,type:"password",ph:"pk_••••••••••••••••••"},
+          ].map(f=>(
+            <div key={f.label} style={{marginBottom:16}}>
+              <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",
+                color:T.sub,marginBottom:6}}>
+                {f.label} {f.hint&&<span style={{textTransform:"none",letterSpacing:0,fontWeight:400,opacity:.7}}>({f.hint})</span>}
+              </div>
+              <input type={f.type} value={f.val} onChange={e=>f.set(e.target.value)}
+                placeholder={f.ph}
+                onKeyDown={e=>e.key==="Enter"&&key.trim()&&onConnect(key.trim(),name)}
+                style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,
+                  borderRadius:9,padding:"10px 14px",color:T.text,
+                  fontFamily:"'DM Sans',sans-serif",fontSize:13,outline:"none"}}/>
+            </div>
+          ))}
+          <div style={{fontSize:11,color:T.sub,marginBottom:20}}>
             Klaviyo → Settings → API Keys → Create Private API Key
           </div>
+          <button onClick={()=>key.trim()&&onConnect(key.trim(),name)}
+            disabled={!key.trim()||loading}
+            style={{width:"100%",padding:"11px 0",
+              background:(!key.trim()||loading)?"#C8CAD8":T.purple,
+              color:"#fff",border:"none",borderRadius:9,
+              cursor:(!key.trim()||loading)?"not-allowed":"pointer",
+              fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",
+              display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+              boxShadow:key.trim()&&!loading?`0 4px 20px ${T.purple}44`:"none"}}>
+            {loading?<><Spin s={16} c="#fff"/> Connecting…</>:"Open Dashboard →"}
+          </button>
+          {err&&<div style={{marginTop:14,padding:"10px 14px",background:T.redL,
+            border:`1px solid #FECACA`,borderRadius:9,fontSize:12,color:T.red,lineHeight:1.6}}>
+            {err}
+          </div>}
         </div>
-
-        <button
-          onClick={()=>key.trim()&&onConnect(key.trim(),label)}
-          disabled={!key.trim()||loading}
-          style={{width:"100%",padding:"12px 0",background:(!key.trim()||loading)?"#D1D5DB":B.purple,
-            color:"#fff",border:"none",borderRadius:9,cursor:(!key.trim()||loading)?"not-allowed":"pointer",
-            fontSize:13,fontWeight:600,fontFamily:"'Lexend',sans-serif",
-            boxShadow:key.trim()&&!loading?`0 3px 16px ${B.purple}44`:"none",
-            display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
-          {loading ? <><Spinner size={16}/> Connecting…</> : "Open Dashboard"}
-        </button>
-
-        {error && (
-          <div style={{marginTop:14,padding:"10px 14px",background:"#FFF0F0",border:"1.5px solid #FED7D7",
-            borderRadius:9,fontSize:12,color:B.red,lineHeight:1.5}}>
-            {error}
-          </div>
-        )}
       </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
 
-// ── Loading screen ────────────────────────────────────────────────
-function LoadingScreen({msg}) {
+function Loading({msg}) {
   return (
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",
-      justifyContent:"center",gap:16,background:B.pageBg}}>
-      <Spinner size={40}/>
-      <div style={{fontSize:16,fontWeight:600,color:B.purple}}>Building dashboard</div>
-      <div style={{fontSize:13,color:B.sub}}>{msg}</div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      justifyContent:"center",gap:14,background:T.bg}}>
+      <Spin s={44}/>
+      <div style={{fontSize:15,fontWeight:600,color:T.purple}}>Building dashboard</div>
+      <div style={{fontSize:12,color:T.sub}}>{msg}</div>
     </div>
   );
 }
 
-// ── Main dashboard ────────────────────────────────────────────────
-function Dashboard({kData, insights, insightsLoading, onRefreshInsights, clientLabel, onSignOut}) {
-  const campaigns = kData.campaigns ?? [];
-  const flows     = kData.flows     ?? [];
+function Dashboard({kData,insights,insLoad,onRefresh,clientLabel,onOut}) {
+  const camps  = kData.campaigns??[];
+  const flows  = kData.flows??[];
+  const hasRev = kData.has_revenue;
+  const cRev   = camps.reduce((s,c)=>s+(c.revenue||0),0);
+  const fRev   = flows.reduce((s,f)=>s+(f.revenue||0),0);
+  const tRev   = cRev+fRev;
+  const tRec   = camps.reduce((s,c)=>s+(c.recipients||0),0);
+  const wOpen  = camps.filter(c=>c.open_rate!=null);
+  const avgO   = wOpen.length?wOpen.reduce((s,c)=>s+c.open_rate,0)/wOpen.length:null;
+  const wClick = camps.filter(c=>c.click_rate!=null);
+  const avgC   = wClick.length?wClick.reduce((s,c)=>s+c.click_rate,0)/wClick.length:null;
+  const live   = flows.filter(f=>f.status==="live").length;
 
-  const withStats = campaigns.filter(c => c.open_rate != null);
-  const avgOpen   = withStats.length ? withStats.reduce((s,c)=>s+c.open_rate,0)/withStats.length : null;
-  const avgClick  = withStats.length ? withStats.reduce((s,c)=>s+c.click_rate,0)/withStats.length : null;
-  const totalRec  = campaigns.reduce((s,c)=>s+(c.recipients??0),0) || null;
-  const liveFlows = flows.filter(f=>f.status==="live").length || flows.length;
-
-  const statCards = [
-    {label:"Total Sends",    value:fmt(totalRec),    sub:"tracked campaigns"},
-    {label:"Avg Open Rate",  value:pct(avgOpen),
-     sub: avgOpen==null?"No stats yet": avgOpen>=0.25?"↑ Above benchmark":"↓ Below benchmark",
-     color: avgOpen==null?B.mid: avgOpen>=0.25?B.green:B.red},
-    {label:"Avg Click Rate", value:pct(avgClick),    sub:"across sent campaigns"},
-    {label:"Active Flows",   value:liveFlows||"—",   sub:`${flows.length} total automated`},
-    {label:"Audiences",
-     value:fmt((kData.list_count||0)+(kData.segment_count||0)),
-     sub:`${kData.list_count||0} lists · ${kData.segment_count||0} segments`},
-  ];
+  const stats = [
+    hasRev&&{label:"Total Email Revenue",val:$m(tRev),sub:"campaigns + flows",c:T.purple,big:true},
+    hasRev&&{label:"Campaign Revenue",val:$m(cRev),sub:`${camps.length} sent`},
+    hasRev&&{label:"Flow Revenue",val:$m(fRev),sub:`${live} live flows`},
+    {label:"Total Recipients",val:fnum(tRec),sub:"12-month sends"},
+    {label:"Avg Open Rate",val:pct(avgO),c:openC(avgO),
+      sub:avgO==null?"No stats yet":avgO>=0.25?"↑ Above benchmark":"↓ Below 25%"},
+    {label:"Avg Click Rate",val:pct(avgC),c:clickC(avgC),
+      sub:avgC==null?"No stats yet":avgC>=0.02?"↑ Above benchmark":"↓ Below 2%"},
+    {label:"Audiences",val:fnum((kData.list_count||0)+(kData.segment_count||0)),
+      sub:`${kData.list_count||0} lists · ${kData.segment_count||0} segments`},
+  ].filter(Boolean);
 
   return (
-    <div style={{minHeight:"100vh",background:B.pageBg,fontFamily:"'Lexend',sans-serif"}}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-
+    <div style={{minHeight:"100vh",background:T.bg,fontFamily:"'DM Sans',sans-serif"}}>
       {/* Header */}
-      <div style={{background:B.white,borderBottom:`1.5px solid ${B.border}`,height:58,
-        display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 30px",
-        position:"sticky",top:0,zIndex:20}}>
+      <div style={{background:T.white,borderBottom:`1px solid ${T.border}`,height:54,
+        display:"flex",alignItems:"center",justifyContent:"space-between",
+        padding:"0 26px",position:"sticky",top:0,zIndex:30}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:30,height:30,borderRadius:8,background:`linear-gradient(135deg,${B.purple},${B.cyan})`,
+          <div style={{width:28,height:28,borderRadius:7,
+            background:"linear-gradient(135deg,#6D4DF4,#00C9B1)",
             display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{color:"#fff",fontSize:15,fontWeight:700}}>i</span>
+            <span style={{color:"#fff",fontSize:14,fontWeight:700,fontFamily:"DM Mono"}}>i</span>
           </div>
-          <span style={{fontWeight:700,fontSize:15,letterSpacing:"-0.02em"}}>insendra</span>
-          <span style={{width:1,height:18,background:B.border,margin:"0 8px"}}/>
-          <span style={{fontSize:13,color:B.sub}}>Client Intelligence</span>
+          <span style={{fontWeight:700,fontSize:14,letterSpacing:"-0.02em"}}>insendra</span>
+          <span style={{width:1,height:15,background:T.border,margin:"0 6px"}}/>
+          <span style={{fontSize:12,color:T.sub}}>Client Intelligence</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:13,fontWeight:600,color:B.text}}>{clientLabel || kData.account?.name || "Account"}</div>
-            <div style={{fontSize:11,color:B.sub}}>
-              {[kData.account?.timezone, kData.account?.currency].filter(Boolean).join(" · ") || "Klaviyo Account"}
+            <div style={{fontSize:13,fontWeight:600}}>{clientLabel||kData.account?.name||"Account"}</div>
+            <div style={{fontSize:11,color:T.sub}}>
+              {[kData.account?.timezone,kData.account?.currency].filter(Boolean).join(" · ")||"Klaviyo Account"}
             </div>
           </div>
-          <button onClick={onSignOut}
-            style={{background:"none",border:`1.5px solid ${B.border}`,color:B.sub,
+          <button onClick={onOut}
+            style={{background:"none",border:`1px solid ${T.border}`,color:T.sub,
               borderRadius:8,padding:"5px 14px",cursor:"pointer",fontSize:12,
-              fontWeight:500,fontFamily:"'Lexend',sans-serif"}}>
+              fontWeight:500,fontFamily:"'DM Sans',sans-serif"}}>
             Sign out
           </button>
         </div>
       </div>
 
-      <div style={{padding:"26px 30px",maxWidth:1200,margin:"0 auto"}}>
-
-        {/* Page title */}
-        <div style={{marginBottom:20}}>
-          <div style={{fontSize:22,fontWeight:700,color:B.text,marginBottom:3}}>Performance Overview</div>
-          <div style={{fontSize:13,color:B.sub}}>Last 12 months · Email marketing intelligence</div>
+      <div style={{padding:"22px 26px",maxWidth:1300,margin:"0 auto"}}>
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:20,fontWeight:700,letterSpacing:"-0.02em",marginBottom:2}}>
+            Performance Overview
+          </div>
+          <div style={{fontSize:12,color:T.sub}}>Last 12 months · Email marketing intelligence</div>
         </div>
 
-        {/* Stat strip */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12,marginBottom:20}}>
-          {statCards.map(s => (
-            <Card key={s.label} style={{padding:"14px 18px"}}>
-              <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:B.sub,marginBottom:7}}>{s.label}</div>
-              <div style={{fontSize:26,fontWeight:700,color:s.color||B.purple,lineHeight:1}}>{s.value}</div>
-              {s.sub && <div style={{fontSize:11,color:B.sub,marginTop:4}}>{s.sub}</div>}
+        {/* Stats */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(165px,1fr))",
+          gap:10,marginBottom:14}}>
+          {stats.map((s,i)=>(
+            <Card key={i} style={{padding:"16px 18px"}}>
+              <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",
+                textTransform:"uppercase",color:T.sub,marginBottom:9}}>{s.label}</div>
+              <div style={{fontSize:s.big?26:22,fontWeight:700,color:s.c||T.text,
+                lineHeight:1,fontFamily:T.mono,marginBottom:5}}>{s.val}</div>
+              <div style={{fontSize:10,color:T.sub}}>{s.sub}</div>
             </Card>
           ))}
         </div>
 
-        {/* Two-col: campaigns + flows */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
-
-          {/* Campaigns */}
-          <Card style={{padding:0,overflow:"hidden"}}>
-            <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`,
-              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <Label>Recent Campaigns</Label>
-              <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,
-                background:"#EDEAFF",color:B.purple}}>Last {campaigns.length}</span>
+        {/* Revenue chart */}
+        {hasRev&&(
+          <Card style={{marginBottom:14}}>
+            <SectionHead title="Revenue Over Time" sub="Email-attributed · last 12 months"/>
+            <div style={{padding:"16px 20px 20px"}}>
+              <RevenueChart monthly={kData.monthly||[]}/>
             </div>
-            {campaigns.length === 0
-              ? <div style={{textAlign:"center",padding:"2rem",color:B.sub,fontSize:13}}>No sent campaigns found.</div>
-              : <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead>
-                    <tr>{["Campaign","Sent","Opens","Clicks","Perf"].map(h=>(
-                      <th key={h} style={{fontSize:10,fontWeight:700,letterSpacing:"0.07em",
-                        textTransform:"uppercase",color:B.sub,padding:"8px 14px",
-                        textAlign:"left",borderBottom:`1.5px solid ${B.border}`}}>{h}</th>
-                    ))}</tr>
-                  </thead>
-                  <tbody>
-                    {campaigns.map((c,i)=>(
-                      <tr key={i} style={{borderBottom:`1px solid ${B.border}`}}>
-                        <td style={{padding:"9px 14px",fontSize:12,fontWeight:500,maxWidth:160,
-                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
-                          title={c.name}>{c.name}</td>
-                        <td style={{padding:"9px 14px",fontSize:12,color:B.sub}}>{fmtDate(c.send_time)}</td>
-                        <td style={{padding:"9px 14px",fontSize:12}}>{pct(c.open_rate)}</td>
-                        <td style={{padding:"9px 14px",fontSize:12}}>{pct(c.click_rate)}</td>
-                        <td style={{padding:"9px 14px"}}><PerfPill rate={c.open_rate}/></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-            }
           </Card>
+        )}
 
-          {/* Flows */}
-          <Card style={{padding:0,overflow:"hidden"}}>
-            <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`,
-              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <Label>Automated Flows</Label>
-              <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,
-                background:"#DAFAFC",color:"#0B8F98"}}>{flows.length} flows</span>
-            </div>
-            {flows.length === 0
-              ? <div style={{textAlign:"center",padding:"2rem",color:B.sub,fontSize:13}}>No flows found.</div>
-              : <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead>
-                    <tr>{["Flow","Trigger","Recipients","Opens"].map(h=>(
-                      <th key={h} style={{fontSize:10,fontWeight:700,letterSpacing:"0.07em",
-                        textTransform:"uppercase",color:B.sub,padding:"8px 14px",
-                        textAlign:"left",borderBottom:`1.5px solid ${B.border}`}}>{h}</th>
-                    ))}</tr>
-                  </thead>
-                  <tbody>
-                    {flows.map((f,i)=>(
-                      <tr key={i} style={{borderBottom:`1px solid ${B.border}`}}>
-                        <td style={{padding:"9px 14px",fontSize:12,fontWeight:500,maxWidth:150,
-                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
-                          title={f.name}>{f.name}</td>
-                        <td style={{padding:"9px 14px"}}>
-                          <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,
-                            background:"#DAFAFC",color:"#0B8F98"}}>{f.trigger_type||"—"}</span>
-                        </td>
-                        <td style={{padding:"9px 14px",fontSize:12}}>{fmt(f.recipients)}</td>
-                        <td style={{padding:"9px 14px",fontSize:12}}>{pct(f.open_rate)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {/* Campaigns */}
+        <Card style={{marginBottom:14}}>
+          <SectionHead
+            title="Campaign Performance"
+            sub={`${camps.length} campaigns · click headers to sort`}
+            right={hasRev&&cRev>0&&(
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:11,color:T.sub}}>Campaign revenue</div>
+                <div style={{fontSize:16,fontWeight:700,color:T.purple,fontFamily:T.mono}}>{$m(cRev)}</div>
+              </div>
+            )}
+          />
+          <CampaignTable campaigns={camps} hasRev={hasRev}/>
+        </Card>
+
+        {/* Flows */}
+        <Card style={{marginBottom:14}}>
+          <SectionHead
+            title="Automated Flows"
+            sub={`${flows.length} flows · click headers to sort`}
+            right={hasRev&&fRev>0&&(
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:11,color:T.sub}}>Flow revenue</div>
+                <div style={{fontSize:16,fontWeight:700,color:T.green,fontFamily:T.mono}}>{$m(fRev)}</div>
+              </div>
+            )}
+          />
+          <FlowTable flows={flows} hasRev={hasRev}/>
+        </Card>
+
+        {/* AI insights */}
+        <Card style={{marginBottom:28}}>
+          <SectionHead
+            title="✦ AI Recommendations"
+            sub="Revenue-focused Claude analysis"
+            right={
+              <button onClick={onRefresh} disabled={insLoad}
+                style={{display:"flex",alignItems:"center",gap:6,background:"none",
+                  border:`1px solid ${T.border}`,borderRadius:8,padding:"5px 12px",
+                  cursor:insLoad?"not-allowed":"pointer",fontSize:11,color:T.sub,
+                  fontFamily:"'DM Sans',sans-serif",fontWeight:500}}>
+                {insLoad?<><Spin s={12}/> Analyzing…</>:"↻ Refresh"}
+              </button>
             }
-          </Card>
-        </div>
-
-        {/* AI Insights */}
-        <Card style={{padding:0,overflow:"hidden"}}>
-          <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`,
-            display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <Label>✦ AI Recommendations</Label>
-            <button onClick={onRefreshInsights} disabled={insightsLoading}
-              style={{background:"none",border:`1.5px solid ${B.border}`,color:B.sub,
-                borderRadius:7,padding:"3px 12px",cursor:insightsLoading?"not-allowed":"pointer",
-                fontSize:11,fontFamily:"'Lexend',sans-serif",fontWeight:500,
-                display:"flex",alignItems:"center",gap:6}}>
-              {insightsLoading ? <><Spinner size={12}/> Analyzing…</> : "↻ Refresh"}
-            </button>
-          </div>
-
-          {insightsLoading ? (
-            <div style={{display:"flex",alignItems:"center",gap:10,padding:"20px 18px",color:B.sub,fontSize:13}}>
-              <Spinner size={16}/> Claude is analyzing your account data…
+          />
+          {insLoad?(
+            <div style={{display:"flex",alignItems:"center",gap:10,padding:"20px",color:T.sub,fontSize:13}}>
+              <Spin s={16}/> Analyzing your account data…
             </div>
-          ) : insights ? (
-            <div style={{padding:"14px 18px"}}>
+          ):insights?(
+            <div style={{padding:"10px 16px"}}>
               {insights.map((ins,i)=>{
-                const bgMap = {good:"#DFFFED", warn:"#FFF8E6", info:"#EFF6FF"};
-                const colorMap = {good:"#0D7A45", warn:"#975A00", info:"#1E40AF"};
+                const bg={good:T.greenL,warn:T.orangeL,info:T.blueL}[ins.type]||T.blueL;
                 return (
-                  <div key={i} style={{display:"flex",gap:12,padding:"12px 0",
-                    borderBottom: i < insights.length-1 ? `1px solid ${B.border}` : "none"}}>
+                  <div key={i} style={{display:"flex",gap:14,padding:"12px 4px",
+                    borderBottom:i<insights.length-1?`1px solid ${T.border}`:"none"}}>
                     <div style={{width:36,height:36,borderRadius:10,flexShrink:0,
-                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",
-                      background: bgMap[ins.type]||bgMap.info}}>
-                      {ins.emoji}
-                    </div>
-                    <div>
-                      <div style={{fontSize:13,fontWeight:600,color:B.text,marginBottom:4}}>{ins.title}</div>
-                      <div style={{fontSize:12,color:B.sub,lineHeight:1.65}}>{ins.body}</div>
+                      background:bg,display:"flex",alignItems:"center",
+                      justifyContent:"center",fontSize:"1.05rem"}}>{ins.emoji}</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>{ins.title}</div>
+                      <div style={{fontSize:12,color:T.sub,lineHeight:1.7}}>{ins.body}</div>
                     </div>
                   </div>
                 );
               })}
             </div>
-          ) : (
-            <div style={{textAlign:"center",padding:"20px",color:B.sub,fontSize:13}}>
-              Could not generate insights.{" "}
-              <button onClick={onRefreshInsights}
-                style={{background:"none",border:"none",color:B.purple,cursor:"pointer",
-                  fontFamily:"'Lexend',sans-serif",fontSize:13,textDecoration:"underline"}}>
+          ):(
+            <div style={{padding:"20px",textAlign:"center",fontSize:13,color:T.sub}}>
+              Could not load insights.{" "}
+              <button onClick={onRefresh} style={{background:"none",border:"none",color:T.purple,
+                cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:13,textDecoration:"underline"}}>
                 Try again
               </button>
             </div>
           )}
         </Card>
-
       </div>
     </div>
   );
 }
 
-// ── App root ──────────────────────────────────────────────────────
 function App() {
-  const [phase,    setPhase]    = useState("login"); // login | loading | dashboard
-  const [loadMsg,  setLoadMsg]  = useState("");
-  const [loginErr, setLoginErr] = useState("");
-  const [apiKey,   setApiKey]   = useState("");
-  const [label,    setLabel]    = useState("");
-  const [kData,    setKData]    = useState(null);
-  const [insights, setInsights] = useState(null);
-  const [insLoad,  setInsLoad]  = useState(false);
+  const [phase,  setPhase]  = useState("login");
+  const [msg,    setMsg]    = useState("");
+  const [err,    setErr]    = useState("");
+  const [kData,  setKData]  = useState(null);
+  const [ins,    setIns]    = useState(null);
+  const [insLoad,setIL]     = useState(false);
+  const [label,  setLabel]  = useState("");
 
-  const handleConnect = useCallback(async (key, clientLabel) => {
-    setLoginErr("");
-    setApiKey(key);
-    setLabel(clientLabel);
-    setPhase("loading");
-    setLoadMsg("Fetching Klaviyo account data…");
+  const connect = useCallback(async(key,clientLabel)=>{
+    setErr(""); setLabel(clientLabel); setPhase("loading"); setMsg("Fetching Klaviyo data…");
     try {
       const data = await loadKlaviyoData(key);
       setKData(data);
-      setLoadMsg("Generating AI insights…");
-      setInsLoad(true);
-      const ins = await loadInsights(data).catch(() => null);
-      setInsights(ins);
-      setInsLoad(false);
+      setMsg("Generating AI insights…");
+      setIL(true);
+      setIns(await loadInsights(data).catch(()=>null));
+      setIL(false);
       setPhase("dashboard");
     } catch(e) {
-      console.error(e);
       setPhase("login");
-      if (e.message?.includes("401") || e.message?.includes("403") || e.message?.includes("Invalid")) {
-        setLoginErr("Invalid API key — use a Private API Key with full access.");
-      } else {
-        setLoginErr(`${e.message || "Unknown error. Check the console for details."}`);
-      }
+      setErr(e.message?.match(/401|403|Invalid/i)
+        ?"Invalid API key — ensure it's a Private API Key with full access"
+        :e.message||"Unexpected error");
     }
-  }, []);
+  },[]);
 
-  const handleSignOut = () => {
-    setPhase("login"); setKData(null); setInsights(null);
-    setApiKey(""); setLabel(""); setLoginErr("");
-  };
+  const signOut = ()=>{ setPhase("login");setKData(null);setIns(null);setLabel("");setErr("");setIL(false); };
+  const refresh = useCallback(async()=>{
+    if(!kData) return; setIL(true);
+    setIns(await loadInsights(kData).catch(()=>null)); setIL(false);
+  },[kData]);
 
-  const handleRefreshInsights = useCallback(async () => {
-    if (!kData) return;
-    setInsLoad(true);
-    const ins = await loadInsights(kData).catch(() => null);
-    setInsights(ins);
-    setInsLoad(false);
-  }, [kData]);
-
-  if (phase === "login")     return <LoginScreen onConnect={handleConnect} error={loginErr} loading={false}/>;
-  if (phase === "loading")   return <LoadingScreen msg={loadMsg}/>;
-  if (phase === "dashboard") return (
-    <Dashboard
-      kData={kData}
-      insights={insights}
-      insightsLoading={insLoad}
-      onRefreshInsights={handleRefreshInsights}
-      clientLabel={label}
-      onSignOut={handleSignOut}
-    />
-  );
+  if (phase==="login")     return <Login onConnect={connect} err={err} loading={false}/>;
+  if (phase==="loading")   return <Loading msg={msg}/>;
+  if (phase==="dashboard") return <Dashboard kData={kData} insights={ins} insLoad={insLoad}
+    onRefresh={refresh} clientLabel={label} onOut={signOut}/>;
   return null;
 }
 
