@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='url(%23g)'/><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%236D4DF4'/><stop offset='1' stop-color='%2300C9B1'/></linearGradient></defs><text x='16' y='22' text-anchor='middle' font-family='sans-serif' font-size='18' font-weight='700' fill='white'>i</text></svg>"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Insendra — Client Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Lexend','Segoe UI',sans-serif;background:#F7F6FF;color:#160F2E;}
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:#F7F6FF;}
+::-webkit-scrollbar-thumb{background:#E8E4FF;border-radius:2px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+// ── Config ────────────────────────────────────────────────────────
+const PROXY = window.location.origin; // uses same server — no hardcoding needed
+
+const B = {
+  purple:"#6D4DF4", green:"#15D197", cyan:"#17D3DD", pink:"#E44DF4",
+  white:"#FFFFFF", pageBg:"#F7F6FF", border:"#E8E4FF",
+  text:"#160F2E", sub:"#6C6A8A", mid:"#38305E",
+  red:"#E53E3E", orange:"#ED8936", blue:"#3182CE",
+};
+
+// ── Helpers ───────────────────────────────────────────────────────
+const fmt  = n => n == null ? "—" : n >= 1e6 ? (n/1e6).toFixed(1)+"M" : n >= 1e3 ? (n/1e3).toFixed(1)+"K" : String(Math.round(n));
+const pct  = n => n == null ? "—" : (n*100).toFixed(1)+"%";
+const fmtDate = s => { if(!s) return "—"; const d = new Date(s); return isNaN(d) ? "—" : d.toLocaleDateString("en-US",{month:"short",day:"numeric"}); };
+
+// ── Data loaders ──────────────────────────────────────────────────
+async function loadKlaviyoData(klaviyoKey) {
+  const res = await fetch(`${PROXY}/klaviyo-data`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ klaviyoKey }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || `Server error ${res.status}`);
+  return json;
+}
+
+async function loadInsights(kData) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1200,
+      system: "You are a senior email marketing strategist. Return ONLY a valid JSON array — no markdown, no prose, no explanation.",
+      messages: [{ role: "user", content:
+        `Analyze this Klaviyo account data and return exactly 5 actionable insights as a JSON array.\n\n${JSON.stringify(kData,null,2)}\n\nReturn:\n[{"type":"good"|"warn"|"info","emoji":"<single emoji>","title":"<short title>","body":"<2-3 sentences, specific and data-driven>"}]`
+      }],
+    }),
+  });
+  if (!res.ok) throw new Error("Insights request failed");
+  const d = await res.json();
+  const raw = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+  return JSON.parse(raw.replace(/```json\s*/g,"").replace(/```\s*/g,"").trim());
+}
+
+// ── Shared components ─────────────────────────────────────────────
+const Card = ({children, style={}}) => (
+  <div style={{background:B.white,border:`1.5px solid ${B.border}`,borderRadius:14,padding:"18px 22px",...style}}>
+    {children}
+  </div>
+);
+
+const Label = ({children}) => (
+  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.13em",textTransform:"uppercase",color:B.sub,marginBottom:11}}>
+    {children}
+  </div>
+);
+
+const Spinner = ({size=20}) => {
+  const s = {
+    width:size, height:size,
+    border:`2px solid #E8E4FF`,
+    borderTopColor:B.purple,
+    borderRadius:"50%",
+    animation:"spin .65s linear infinite",
+    display:"inline-block",
+  };
+  return <span style={s}/>;
+};
+
+function PerfPill({rate}) {
+  if (rate == null) return <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#F0EFFF",color:B.sub}}>N/A</span>;
+  if (rate >= 0.25) return <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#DFFFED",color:"#0D7A45"}}>Strong</span>;
+  if (rate >= 0.15) return <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#FFF8E6",color:"#975A00"}}>Average</span>;
+  return <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#FFF0F0",color:B.red}}>Low</span>;
+}
+
+// ── Login screen ──────────────────────────────────────────────────
+function LoginScreen({onConnect, error, loading}) {
+  const [key,   setKey]   = useState("");
+  const [label, setLabel] = useState("");
+
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"2rem",
+      background:`radial-gradient(ellipse 70% 50% at 50% -5%, #EDE9FF 0%, ${B.pageBg} 65%)`}}>
+      <div style={{width:"100%",maxWidth:420,background:B.white,border:`1.5px solid ${B.border}`,
+        borderRadius:20,padding:"2.8rem 2.5rem",
+        boxShadow:"0 40px 80px rgba(109,77,244,0.10), 0 0 0 1px rgba(109,77,244,0.06)"}}>
+
+        {/* Logo */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+          <div style={{width:32,height:32,borderRadius:8,background:`linear-gradient(135deg,${B.purple},${B.cyan})`,
+            display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{color:"#fff",fontSize:16,fontWeight:700}}>i</span>
+          </div>
+          <span style={{fontWeight:700,fontSize:16,letterSpacing:"-0.02em"}}>insendra</span>
+        </div>
+        <div style={{fontSize:13,color:B.sub,marginBottom:28}}>Client Intelligence Dashboard</div>
+
+        {/* Client name */}
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:B.sub,marginBottom:6}}>
+            Client Name <span style={{textTransform:"none",letterSpacing:0,fontWeight:400}}>(optional)</span>
+          </div>
+          <input
+            style={{width:"100%",background:B.pageBg,border:`1.5px solid ${B.border}`,borderRadius:9,
+              padding:"10px 14px",color:B.text,fontFamily:"'Lexend',sans-serif",fontSize:13,outline:"none"}}
+            placeholder="e.g. Acme Brands"
+            value={label}
+            onChange={e=>setLabel(e.target.value)}
+          />
+        </div>
+
+        {/* API key */}
+        <div style={{marginBottom:22}}>
+          <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:B.sub,marginBottom:6}}>
+            Klaviyo Private API Key
+          </div>
+          <input
+            type="password"
+            style={{width:"100%",background:B.pageBg,border:`1.5px solid ${B.border}`,borderRadius:9,
+              padding:"10px 14px",color:B.text,fontFamily:"'Lexend',sans-serif",fontSize:13,outline:"none"}}
+            placeholder="pk_••••••••••••••••••••••••"
+            value={key}
+            onChange={e=>setKey(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&key.trim()&&onConnect(key.trim(),label)}
+          />
+          <div style={{fontSize:11,color:B.sub,marginTop:6}}>
+            Klaviyo → Settings → API Keys → Create Private API Key
+          </div>
+        </div>
+
+        <button
+          onClick={()=>key.trim()&&onConnect(key.trim(),label)}
+          disabled={!key.trim()||loading}
+          style={{width:"100%",padding:"12px 0",background:(!key.trim()||loading)?"#D1D5DB":B.purple,
+            color:"#fff",border:"none",borderRadius:9,cursor:(!key.trim()||loading)?"not-allowed":"pointer",
+            fontSize:13,fontWeight:600,fontFamily:"'Lexend',sans-serif",
+            boxShadow:key.trim()&&!loading?`0 3px 16px ${B.purple}44`:"none",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+          {loading ? <><Spinner size={16}/> Connecting…</> : "Open Dashboard"}
+        </button>
+
+        {error && (
+          <div style={{marginTop:14,padding:"10px 14px",background:"#FFF0F0",border:"1.5px solid #FED7D7",
+            borderRadius:9,fontSize:12,color:B.red,lineHeight:1.5}}>
+            {error}
+          </div>
+        )}
+      </div>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+}
+
+// ── Loading screen ────────────────────────────────────────────────
+function LoadingScreen({msg}) {
+  return (
+    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",
+      justifyContent:"center",gap:16,background:B.pageBg}}>
+      <Spinner size={40}/>
+      <div style={{fontSize:16,fontWeight:600,color:B.purple}}>Building dashboard</div>
+      <div style={{fontSize:13,color:B.sub}}>{msg}</div>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+}
+
+// ── Main dashboard ────────────────────────────────────────────────
+function Dashboard({kData, insights, insightsLoading, onRefreshInsights, clientLabel, onSignOut}) {
+  const campaigns = kData.campaigns ?? [];
+  const flows     = kData.flows     ?? [];
+
+  const withStats = campaigns.filter(c => c.open_rate != null);
+  const avgOpen   = withStats.length ? withStats.reduce((s,c)=>s+c.open_rate,0)/withStats.length : null;
+  const avgClick  = withStats.length ? withStats.reduce((s,c)=>s+c.click_rate,0)/withStats.length : null;
+  const totalRec  = campaigns.reduce((s,c)=>s+(c.recipients??0),0) || null;
+  const liveFlows = flows.filter(f=>f.status==="live").length || flows.length;
+
+  const statCards = [
+    {label:"Total Sends",    value:fmt(totalRec),    sub:"tracked campaigns"},
+    {label:"Avg Open Rate",  value:pct(avgOpen),
+     sub: avgOpen==null?"No stats yet": avgOpen>=0.25?"↑ Above benchmark":"↓ Below benchmark",
+     color: avgOpen==null?B.mid: avgOpen>=0.25?B.green:B.red},
+    {label:"Avg Click Rate", value:pct(avgClick),    sub:"across sent campaigns"},
+    {label:"Active Flows",   value:liveFlows||"—",   sub:`${flows.length} total automated`},
+    {label:"Audiences",
+     value:fmt((kData.list_count||0)+(kData.segment_count||0)),
+     sub:`${kData.list_count||0} lists · ${kData.segment_count||0} segments`},
+  ];
+
+  return (
+    <div style={{minHeight:"100vh",background:B.pageBg,fontFamily:"'Lexend',sans-serif"}}>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+
+      {/* Header */}
+      <div style={{background:B.white,borderBottom:`1.5px solid ${B.border}`,height:58,
+        display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 30px",
+        position:"sticky",top:0,zIndex:20}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:30,height:30,borderRadius:8,background:`linear-gradient(135deg,${B.purple},${B.cyan})`,
+            display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{color:"#fff",fontSize:15,fontWeight:700}}>i</span>
+          </div>
+          <span style={{fontWeight:700,fontSize:15,letterSpacing:"-0.02em"}}>insendra</span>
+          <span style={{width:1,height:18,background:B.border,margin:"0 8px"}}/>
+          <span style={{fontSize:13,color:B.sub}}>Client Intelligence</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:13,fontWeight:600,color:B.text}}>{clientLabel || kData.account?.name || "Account"}</div>
+            <div style={{fontSize:11,color:B.sub}}>
+              {[kData.account?.timezone, kData.account?.currency].filter(Boolean).join(" · ") || "Klaviyo Account"}
+            </div>
+          </div>
+          <button onClick={onSignOut}
+            style={{background:"none",border:`1.5px solid ${B.border}`,color:B.sub,
+              borderRadius:8,padding:"5px 14px",cursor:"pointer",fontSize:12,
+              fontWeight:500,fontFamily:"'Lexend',sans-serif"}}>
+            Sign out
+          </button>
+        </div>
+      </div>
+
+      <div style={{padding:"26px 30px",maxWidth:1200,margin:"0 auto"}}>
+
+        {/* Page title */}
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:22,fontWeight:700,color:B.text,marginBottom:3}}>Performance Overview</div>
+          <div style={{fontSize:13,color:B.sub}}>Last 12 months · Email marketing intelligence</div>
+        </div>
+
+        {/* Stat strip */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12,marginBottom:20}}>
+          {statCards.map(s => (
+            <Card key={s.label} style={{padding:"14px 18px"}}>
+              <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:B.sub,marginBottom:7}}>{s.label}</div>
+              <div style={{fontSize:26,fontWeight:700,color:s.color||B.purple,lineHeight:1}}>{s.value}</div>
+              {s.sub && <div style={{fontSize:11,color:B.sub,marginTop:4}}>{s.sub}</div>}
+            </Card>
+          ))}
+        </div>
+
+        {/* Two-col: campaigns + flows */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+
+          {/* Campaigns */}
+          <Card style={{padding:0,overflow:"hidden"}}>
+            <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`,
+              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <Label>Recent Campaigns</Label>
+              <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,
+                background:"#EDEAFF",color:B.purple}}>Last {campaigns.length}</span>
+            </div>
+            {campaigns.length === 0
+              ? <div style={{textAlign:"center",padding:"2rem",color:B.sub,fontSize:13}}>No sent campaigns found.</div>
+              : <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead>
+                    <tr>{["Campaign","Sent","Opens","Clicks","Perf"].map(h=>(
+                      <th key={h} style={{fontSize:10,fontWeight:700,letterSpacing:"0.07em",
+                        textTransform:"uppercase",color:B.sub,padding:"8px 14px",
+                        textAlign:"left",borderBottom:`1.5px solid ${B.border}`}}>{h}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody>
+                    {campaigns.map((c,i)=>(
+                      <tr key={i} style={{borderBottom:`1px solid ${B.border}`}}>
+                        <td style={{padding:"9px 14px",fontSize:12,fontWeight:500,maxWidth:160,
+                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
+                          title={c.name}>{c.name}</td>
+                        <td style={{padding:"9px 14px",fontSize:12,color:B.sub}}>{fmtDate(c.send_time)}</td>
+                        <td style={{padding:"9px 14px",fontSize:12}}>{pct(c.open_rate)}</td>
+                        <td style={{padding:"9px 14px",fontSize:12}}>{pct(c.click_rate)}</td>
+                        <td style={{padding:"9px 14px"}}><PerfPill rate={c.open_rate}/></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+            }
+          </Card>
+
+          {/* Flows */}
+          <Card style={{padding:0,overflow:"hidden"}}>
+            <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`,
+              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <Label>Automated Flows</Label>
+              <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,
+                background:"#DAFAFC",color:"#0B8F98"}}>{flows.length} flows</span>
+            </div>
+            {flows.length === 0
+              ? <div style={{textAlign:"center",padding:"2rem",color:B.sub,fontSize:13}}>No flows found.</div>
+              : <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead>
+                    <tr>{["Flow","Trigger","Recipients","Opens"].map(h=>(
+                      <th key={h} style={{fontSize:10,fontWeight:700,letterSpacing:"0.07em",
+                        textTransform:"uppercase",color:B.sub,padding:"8px 14px",
+                        textAlign:"left",borderBottom:`1.5px solid ${B.border}`}}>{h}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody>
+                    {flows.map((f,i)=>(
+                      <tr key={i} style={{borderBottom:`1px solid ${B.border}`}}>
+                        <td style={{padding:"9px 14px",fontSize:12,fontWeight:500,maxWidth:150,
+                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
+                          title={f.name}>{f.name}</td>
+                        <td style={{padding:"9px 14px"}}>
+                          <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,
+                            background:"#DAFAFC",color:"#0B8F98"}}>{f.trigger_type||"—"}</span>
+                        </td>
+                        <td style={{padding:"9px 14px",fontSize:12}}>{fmt(f.recipients)}</td>
+                        <td style={{padding:"9px 14px",fontSize:12}}>{pct(f.open_rate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+            }
+          </Card>
+        </div>
+
+        {/* AI Insights */}
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`,
+            display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <Label>✦ AI Recommendations</Label>
+            <button onClick={onRefreshInsights} disabled={insightsLoading}
+              style={{background:"none",border:`1.5px solid ${B.border}`,color:B.sub,
+                borderRadius:7,padding:"3px 12px",cursor:insightsLoading?"not-allowed":"pointer",
+                fontSize:11,fontFamily:"'Lexend',sans-serif",fontWeight:500,
+                display:"flex",alignItems:"center",gap:6}}>
+              {insightsLoading ? <><Spinner size={12}/> Analyzing…</> : "↻ Refresh"}
+            </button>
+          </div>
+
+          {insightsLoading ? (
+            <div style={{display:"flex",alignItems:"center",gap:10,padding:"20px 18px",color:B.sub,fontSize:13}}>
+              <Spinner size={16}/> Claude is analyzing your account data…
+            </div>
+          ) : insights ? (
+            <div style={{padding:"14px 18px"}}>
+              {insights.map((ins,i)=>{
+                const bgMap = {good:"#DFFFED", warn:"#FFF8E6", info:"#EFF6FF"};
+                const colorMap = {good:"#0D7A45", warn:"#975A00", info:"#1E40AF"};
+                return (
+                  <div key={i} style={{display:"flex",gap:12,padding:"12px 0",
+                    borderBottom: i < insights.length-1 ? `1px solid ${B.border}` : "none"}}>
+                    <div style={{width:36,height:36,borderRadius:10,flexShrink:0,
+                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",
+                      background: bgMap[ins.type]||bgMap.info}}>
+                      {ins.emoji}
+                    </div>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:B.text,marginBottom:4}}>{ins.title}</div>
+                      <div style={{fontSize:12,color:B.sub,lineHeight:1.65}}>{ins.body}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{textAlign:"center",padding:"20px",color:B.sub,fontSize:13}}>
+              Could not generate insights.{" "}
+              <button onClick={onRefreshInsights}
+                style={{background:"none",border:"none",color:B.purple,cursor:"pointer",
+                  fontFamily:"'Lexend',sans-serif",fontSize:13,textDecoration:"underline"}}>
+                Try again
+              </button>
+            </div>
+          )}
+        </Card>
+
+      </div>
+    </div>
+  );
+}
+
+// ── App root ──────────────────────────────────────────────────────
+function App() {
+  const [phase,    setPhase]    = useState("login"); // login | loading | dashboard
+  const [loadMsg,  setLoadMsg]  = useState("");
+  const [loginErr, setLoginErr] = useState("");
+  const [apiKey,   setApiKey]   = useState("");
+  const [label,    setLabel]    = useState("");
+  const [kData,    setKData]    = useState(null);
+  const [insights, setInsights] = useState(null);
+  const [insLoad,  setInsLoad]  = useState(false);
+
+  const handleConnect = useCallback(async (key, clientLabel) => {
+    setLoginErr("");
+    setApiKey(key);
+    setLabel(clientLabel);
+    setPhase("loading");
+    setLoadMsg("Fetching Klaviyo account data…");
+    try {
+      const data = await loadKlaviyoData(key);
+      setKData(data);
+      setLoadMsg("Generating AI insights…");
+      setInsLoad(true);
+      const ins = await loadInsights(data).catch(() => null);
+      setInsights(ins);
+      setInsLoad(false);
+      setPhase("dashboard");
+    } catch(e) {
+      console.error(e);
+      setPhase("login");
+      if (e.message?.includes("401") || e.message?.includes("403") || e.message?.includes("Invalid")) {
+        setLoginErr("Invalid API key — use a Private API Key with full access.");
+      } else {
+        setLoginErr(`${e.message || "Unknown error. Check the console for details."}`);
+      }
+    }
+  }, []);
+
+  const handleSignOut = () => {
+    setPhase("login"); setKData(null); setInsights(null);
+    setApiKey(""); setLabel(""); setLoginErr("");
+  };
+
+  const handleRefreshInsights = useCallback(async () => {
+    if (!kData) return;
+    setInsLoad(true);
+    const ins = await loadInsights(kData).catch(() => null);
+    setInsights(ins);
+    setInsLoad(false);
+  }, [kData]);
+
+  if (phase === "login")     return <LoginScreen onConnect={handleConnect} error={loginErr} loading={false}/>;
+  if (phase === "loading")   return <LoadingScreen msg={loadMsg}/>;
+  if (phase === "dashboard") return (
+    <Dashboard
+      kData={kData}
+      insights={insights}
+      insightsLoading={insLoad}
+      onRefreshInsights={handleRefreshInsights}
+      clientLabel={label}
+      onSignOut={handleSignOut}
+    />
+  );
+  return null;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
