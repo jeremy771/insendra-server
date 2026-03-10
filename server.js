@@ -1315,7 +1315,7 @@ app.post("/run-dms-now", async (req, res) => {
   await runDailyDMs();
 });
 
-// ── NEW: POST /klaviyo-data — client Klaviyo proxy ────────────────
+// ── POST /klaviyo-data — client Klaviyo proxy ────────────────────
 // Fetches any client's Klaviyo data server-side (avoids CORS issues).
 // The client's private API key is passed per-request and never stored.
 const KV_BASE = "https://a.klaviyo.com/api";
@@ -1336,33 +1336,67 @@ app.post("/klaviyo-data", async (req, res) => {
   }).then(r => r.json());
 
   try {
+    // 1. Fetch metrics to get the real conversion metric ID (required for revenue data)
+    const metricsRes = await kv("/metrics/?page[size]=200&fields[metric]=name").catch(() => ({}));
+    const metrics    = metricsRes.data || [];
+    const convMetric = metrics.find(m => m.attributes?.name === "Placed Order")
+                    || metrics.find(m => m.attributes?.name === "Ordered Product")
+                    || null;
+    const convId = convMetric?.id || null;
+
+    // 2. Fetch account, campaigns (no broken channel filter), flows, lists, segments in parallel
     const [acctRes, campRes, flowRes, listRes, segRes] = await Promise.all([
       kv("/accounts/"),
-      kv(`/campaigns/?filter=and(equals(messages.channel,'email'),equals(status,'Sent'))&sort=-send_time&page[size]=20&fields[campaign]=name,status,send_time`),
-      kv(`/flows/?page[size]=10&sort=-updated&fields[flow]=name,status,trigger_type`),
+      kv(`/campaigns/?sort=-send_time&page[size]=50&fields[campaign]=name,status,send_time`),
+      kv(`/flows/?page[size]=20&sort=-updated&fields[flow]=name,status,trigger_type`),
       kv("/lists/?page[size]=1").catch(() => ({})),
       kv("/segments/?page[size]=1").catch(() => ({})),
     ]);
 
-    const campaigns = campRes.data ?? [];
-    const flows     = flowRes.data ?? [];
+    const allCampaigns  = campRes.data ?? [];
+    // Filter sent campaigns in code — avoids broken API-side filter syntax
+    const campaigns     = allCampaigns.filter(c => ["Sent", "Complete"].includes(c.attributes?.status));
+    const flows         = flowRes.data ?? [];
 
-    const [campStats, flowStats] = await Promise.all([
-      campaigns.length ? kvPost("/campaign-values-reports/", { data: { type: "campaign-values-report", attributes: {
-        timeframe: { key: "last_12_months" }, conversion_metric_id: null,
-        statistics: ["recipients","open_rate","click_rate","unsubscribe_rate","bounce_rate"],
-        filter: `any(campaign_id,[${campaigns.slice(0,10).map(c=>`'${c.id}'`).join(",")}])`,
-      }}}).catch(() => ({})) : Promise.resolve({}),
-      flows.length ? kvPost("/flow-values-reports/", { data: { type: "flow-values-report", attributes: {
-        timeframe: { key: "last_12_months" }, conversion_metric_id: null,
-        statistics: ["recipients","open_rate","click_rate"],
-        filter: `any(flow_id,[${flows.slice(0,8).map(f=>`'${f.id}'`).join(",")}])`,
-      }}}).catch(() => ({})) : Promise.resolve({}),
-    ]);
+    // 3. Campaign stats (with revenue if conversion metric exists)
+    const campStatsP = campaigns.length ? kvPost("/campaign-values-reports/", { data: { type: "campaign-values-report", attributes: {
+      timeframe: { key: "last_12_months" },
+      ...(convId && { conversion_metric_id: convId }),
+      statistics: ["recipients","open_rate","click_rate","unsubscribe_rate","bounce_rate","conversions"],
+      ...(convId && { value_statistics: ["conversion_value","revenue_per_recipient","average_order_value"] }),
+      filter: `any(campaign_id,[${campaigns.slice(0,20).map(c=>`'${c.id}'`).join(",")}])`,
+    }}}).catch(() => ({})) : Promise.resolve({});
+
+    // 4. Flow stats (with revenue if conversion metric exists)
+    const flowStatsP = flows.length ? kvPost("/flow-values-reports/", { data: { type: "flow-values-report", attributes: {
+      timeframe: { key: "last_12_months" },
+      ...(convId && { conversion_metric_id: convId }),
+      statistics: ["recipients","open_rate","click_rate","conversions"],
+      ...(convId && { value_statistics: ["conversion_value","revenue_per_recipient"] }),
+      filter: `any(flow_id,[${flows.slice(0,20).map(f=>`'${f.id}'`).join(",")}])`,
+    }}}).catch(() => ({})) : Promise.resolve({});
+
+    // 5. Monthly revenue aggregates for the chart
+    const monthlyP = convId ? kvPost("/metric-aggregates/", { data: { type: "metric-aggregate", attributes: {
+      metric_id: convId,
+      measurements: ["sum_value"],
+      interval: "month",
+      timeframe: { key: "last_12_months" },
+    }}}).catch(() => ({})) : Promise.resolve({});
+
+    const [campStats, flowStats, monthlyData] = await Promise.all([campStatsP, flowStatsP, monthlyP]);
 
     const cs   = campStats.data?.attributes?.results ?? [];
     const fs   = flowStats.data?.attributes?.results ?? [];
     const acct = acctRes.data?.[0]?.attributes ?? {};
+
+    // Parse monthly chart data — Klaviyo returns dates[] + data[{dimensions,measurements}]
+    const mDates  = monthlyData.data?.attributes?.dates ?? [];
+    const mPoints = monthlyData.data?.attributes?.data  ?? [];
+    const monthly = mDates.map((date, i) => ({
+      month:   date,
+      revenue: mPoints.reduce((sum, d) => sum + (d.measurements?.sum_value?.[i] ?? 0), 0),
+    }));
 
     res.json({
       account: {
@@ -1370,22 +1404,39 @@ app.post("/klaviyo-data", async (req, res) => {
         timezone: acct.timezone ?? "",
         currency: acct.preferred_currency ?? "",
       },
-      campaigns: campaigns.slice(0,10).map(c => {
-        const s = cs.find(r => r.groupings?.campaign_id === c.id)?.statistics ?? {};
+      has_revenue: !!convId,
+      campaigns: campaigns.slice(0, 20).map(c => {
+        const result = cs.find(r => r.groupings?.campaign_id === c.id);
+        const s  = result?.statistics     ?? {};
+        const vs = result?.value_statistics ?? {};
         return {
           id: c.id, name: c.attributes.name, send_time: c.attributes.send_time,
-          recipients: s.recipients ?? null, open_rate: s.open_rate ?? null,
-          click_rate: s.click_rate ?? null, unsubscribe_rate: s.unsubscribe_rate ?? null,
+          recipients:       s.recipients       ?? null,
+          open_rate:        s.open_rate        ?? null,
+          click_rate:       s.click_rate       ?? null,
+          unsubscribe_rate: s.unsubscribe_rate ?? null,
+          conversions:      s.conversions      ?? null,
+          revenue:          vs.conversion_value         ?? s.conversion_value         ?? null,
+          rpr:              vs.revenue_per_recipient    ?? s.revenue_per_recipient    ?? null,
+          aov:              vs.average_order_value      ?? s.average_order_value      ?? null,
         };
       }),
       flows: flows.map(f => {
-        const s = fs.find(r => r.groupings?.flow_id === f.id)?.statistics ?? {};
+        const result = fs.find(r => r.groupings?.flow_id === f.id);
+        const s  = result?.statistics     ?? {};
+        const vs = result?.value_statistics ?? {};
         return {
-          id: f.id, name: f.attributes.name, status: f.attributes.status,
-          trigger_type: f.attributes.trigger_type,
-          recipients: s.recipients ?? null, open_rate: s.open_rate ?? null, click_rate: s.click_rate ?? null,
+          id: f.id, name: f.attributes.name,
+          status: f.attributes.status, trigger_type: f.attributes.trigger_type,
+          recipients:  s.recipients  ?? null,
+          open_rate:   s.open_rate   ?? null,
+          click_rate:  s.click_rate  ?? null,
+          conversions: s.conversions ?? null,
+          revenue:     vs.conversion_value      ?? s.conversion_value      ?? null,
+          rpr:         vs.revenue_per_recipient ?? s.revenue_per_recipient ?? null,
         };
       }),
+      monthly,
       list_count:    listRes.meta?.total_count ?? 0,
       segment_count: segRes.meta?.total_count  ?? 0,
     });
