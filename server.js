@@ -304,6 +304,8 @@ app.post("/snapshot", async (req, res) => {
 });
 
 // ── POST /backfill ────────────────────────────────────────────────
+// Fetches completed records since a start date and infers on-time
+// status using sendDate as the completion deadline proxy.
 app.post("/backfill", async (req, res) => {
   try {
     const { since = "2026-01-01" } = req.body;
@@ -315,6 +317,7 @@ app.post("/backfill", async (req, res) => {
     do {
       const url = new URL(`https://api.airtable.com/v0/${AT_BASE}/${AT_TABLE}`);
       url.searchParams.set("pageSize", "100");
+      // Fetch completed records with a send date after our since date
       url.searchParams.set("filterByFormula",
         `AND({Status} = "Complete", IS_AFTER({Send Date/Activation Date}, "${since}"))`
       );
@@ -346,12 +349,15 @@ app.post("/backfill", async (req, res) => {
       offset = data.offset || null;
     } while (offset);
 
+    // Filter to records after sinceDate
     const filtered = allRecords.filter(d => d.sendDate && new Date(d.sendDate) >= sinceDate);
+
     const perfLog = readJSON(PERF_LOG, []);
     const existingIds = new Set(perfLog.map(e => e.taskId + e.role));
     let added = 0;
 
     filtered.forEach(d => {
+      // For each role, check if they had a deadline and infer on-time
       const roles = [
         { role:"copywriter", people: d.copywriter,                    deadline: d.copyDeadline   },
         { role:"designer",   people: d.designer,                      deadline: d.designDeadline },
@@ -361,17 +367,20 @@ app.post("/backfill", async (req, res) => {
 
       roles.forEach(({ role, people, deadline }) => {
         if (!people?.length || !deadline) return;
+        // Only use statusUpdated — skip if not available (no proxy fallback)
         if (!d.statusUpdated) return;
         const completedAt = new Date(d.statusUpdated);
         const deadlineDate = new Date(deadline);
         deadlineDate.setHours(23, 59, 59, 999);
         const onTime = completedAt <= deadlineDate;
         const month = completedAt.toISOString().slice(0, 7);
+
+        // Skip if before sinceDate
         if (completedAt < sinceDate) return;
 
         people.forEach(p => {
           const key = d.id + role;
-          if (existingIds.has(key)) return;
+          if (existingIds.has(key)) return; // don't duplicate
           existingIds.add(key);
           perfLog.push({
             personId:    p.id,
@@ -402,6 +411,7 @@ app.post("/backfill", async (req, res) => {
   }
 });
 
+
 // ── DM On/Off Switch ─────────────────────────────────────────────
 let dmsEnabled = true;
 
@@ -416,6 +426,9 @@ app.get("/dms-status", (req, res) => {
 });
 
 // ── Status Change Polling ─────────────────────────────────────────
+// Runs every 5 minutes, compares current Airtable statuses to snapshot,
+// sends a rich DM to the new task owner on any status change.
+
 const TEAM = {
   "usrDi7oYvN51c0Z4H": { name: "Mariana Lara",       slackId: "U0AGYC9PNUR",  role: "manager"     },
   "usrov3FwJAjCJQSKY": { name: "Laryssa Wirstiuk",   slackId: "U0A9ZBD7K9B",  role: "manager"     },
@@ -433,13 +446,17 @@ const STATUS_ACTIONS = {
   "Ready For Design":                    { role: "designer",   action: "Start design",     urgencyField: "designDeadline" },
   "Design in Progress":                  { role: "designer",   action: "Finish design",    urgencyField: "designDeadline" },
   "Design Complete - Ready for QA":      { role: "manager",    action: "QA design",        urgencyField: "designDeadline" },
-  "Client Review":                       { role: "manager",    action: "Follow up",        urgencyField: "dueDate"        },
+  "Client Review":                       { role: "manager",    action: "Follow up",        urgencyField: "sendDate"       },
   "Upload":                              { role: "uploader",   action: "Upload",           urgencyField: "uploadDeadline" },
   "Schedule":                            { role: "uploader",   action: "Schedule send",    urgencyField: "uploadDeadline" },
   "Revisions":                           { role: "designer",   action: "Make revisions",   urgencyField: "designDeadline" },
 };
 
 const AT_BASE_URL = `https://airtable.com/${AT_BASE}/tbltj1I38yoAh2HOF`;
+const DASHBOARD_BASE_URL = process.env.RENDER_EXTERNAL_URL || "https://insendra-server.onrender.com";
+function clientDashboardURL(clientName) {
+  return `${DASHBOARD_BASE_URL}/dashboard?client=${encodeURIComponent(clientName)}`;
+}
 const PRIORITY_COLORS = {
   overdue: "#E53E3E",
   soon:    "#F59E0B",
@@ -484,6 +501,7 @@ function buildStatusChangeDM(record, newStatus, person) {
     : days <= 3 ? PRIORITY_COLORS.soon
     : PRIORITY_COLORS.later;
 
+  // Build stacked lines — each piece of info on its own line
   const lines = [];
   lines.push(`*${record.name}*`);
   lines.push(`*${newStatus}*`);
@@ -491,7 +509,7 @@ function buildStatusChangeDM(record, newStatus, person) {
   if (dl) lines.push(`${fieldLabel}: ${dl}`);
 
   return {
-    text: record.name,
+    text: record.name, // fallback plain text (no duplicate shown in UI)
     blocks: [],
     attachments: [
       {
@@ -543,7 +561,7 @@ async function fetchAllDeliverables() {
         manager:    getPpl(f["Manager"]),
         copywriter: getPpl(f["Copywriter"]),
         designer:   getPpl(f["Designer"]),
-        uploader:   getPpl(f["Uploader"])[0] || null,
+        uploader:   getPpl(f["Uploader"]) [0] || null,
       });
     });
     offset = data.offset || null;
@@ -580,11 +598,13 @@ async function pollForStatusChanges() {
         name: record.name,
       };
 
+      // Skip if no previous snapshot or status hasn't changed
       if (!prev || prev.status === record.status) continue;
 
       const sc = STATUS_ACTIONS[record.status];
       if (!sc) continue;
 
+      // Find who owns this task now
       let owners = [];
       if (sc.role === "manager")    owners = record.manager    || [];
       if (sc.role === "copywriter") owners = record.copywriter || [];
@@ -595,6 +615,7 @@ async function pollForStatusChanges() {
         const person = team[owner.id];
         if (!person) continue;
 
+        // Skip resend tasks for copywriters
         if (sc.role === "copywriter" && /resend/i.test(record.name)) continue;
 
         const dm = buildStatusChangeDM(record, record.status, person);
@@ -606,6 +627,7 @@ async function pollForStatusChanges() {
       }
     }
 
+    // Save updated snapshot
     writeJSON(SNAPSHOT, newSnap);
     if (changeCount === 0) console.log("[poll] No changes detected.");
     else console.log(`[poll] ${changeCount} notification(s) sent.`);
@@ -614,11 +636,14 @@ async function pollForStatusChanges() {
   }
 }
 
+// Start polling every 5 minutes (after server is listening)
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
+
 
 // ── Slack Event Subscriptions ─────────────────────────────────────
 const processedEvents = new Set();
 
+// Cache deliverables for 5 minutes to avoid fetching Airtable on every message
 let deliverableCache = null;
 let deliverableCacheTime = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -637,10 +662,12 @@ async function getCachedDeliverables() {
 app.post("/slack/events", async (req, res) => {
   const body = req.body;
 
+  // URL verification challenge (Slack setup)
   if (body.type === "url_verification") {
     return res.json({ challenge: body.challenge });
   }
 
+  // Acknowledge immediately so Slack doesn't retry
   res.sendStatus(200);
 
   const event = body.event;
@@ -649,6 +676,7 @@ app.post("/slack/events", async (req, res) => {
   if (event.subtype) return;
   if (event.bot_id) return;
 
+  // Dedup
   if (processedEvents.has(event.client_msg_id)) return;
   if (event.client_msg_id) processedEvents.add(event.client_msg_id);
   if (processedEvents.size > 500) processedEvents.clear();
@@ -725,6 +753,7 @@ async function buildTaskContext(records, userSlackId) {
   const lines = [];
   const person = Object.entries(team).find(([, m]) => m.slackId === userSlackId)?.[1];
 
+  // Helper to get task owner IDs
   const getOwners = r => {
     const sc = STATUS_ACTIONS[r.status];
     if (!sc) return [];
@@ -735,6 +764,7 @@ async function buildTaskContext(records, userSlackId) {
     return [];
   };
 
+  // Person's own tasks
   if (person) {
     const myTasks = records.filter(r => getOwners(r).some(o => o.id && team[o.id]?.slackId === userSlackId));
     if (myTasks.length) {
@@ -750,6 +780,7 @@ async function buildTaskContext(records, userSlackId) {
     }
   }
 
+  // All deliverables — compact one line each
   lines.push("All deliverables:");
   records.slice(0, 80).forEach(r => {
     const days = daysUntilEST(r.sendDate);
@@ -758,6 +789,7 @@ async function buildTaskContext(records, userSlackId) {
     lines.push(`  ${r.name} | ${r.status}${daysStr} | ${owners}`);
   });
 
+  // Team summary
   lines.push("\nTeam:");
   Object.entries(team).forEach(([id, member]) => {
     const count = records.filter(r => getOwners(r).some(o => o.id === id)).length;
@@ -778,9 +810,15 @@ app.get("/config", async (req, res) => {
   }
 });
 
+
 // ── Server-side Daily DM Scheduler ───────────────────────────────
+// Runs automatically every day at 9AM EST, Mon-Sat
+// Replaces the browser-based scheduler entirely
+
 const SERVER_URL = "https://insendra-server.onrender.com";
 
+// Helper: EST today as Date object
+// Get current time broken into EST components — avoids locale string parsing bugs
 function estPartsSrv() {
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -789,6 +827,7 @@ function estPartsSrv() {
     hour12: false
   });
   const parts = Object.fromEntries(fmt.formatToParts(new Date()).map(p => [p.type, p.value]));
+  // Return a plain Date constructed from EST components (treated as local for arithmetic)
   return new Date(
     parseInt(parts.year), parseInt(parts.month) - 1, parseInt(parts.day),
     parseInt(parts.hour), parseInt(parts.minute), parseInt(parts.second)
@@ -800,8 +839,10 @@ function estTodaySrv() {
   return new Date(est.getFullYear(), est.getMonth(), est.getDate());
 }
 
+// Helper: is today Monday (EST)?
 const isMondaySrv = () => estPartsSrv().getDay() === 1;
 
+// Deadline label
 function deadlineLabelSched(days, dateStr){
   if(days===null||!dateStr)return null;
   const d=new Date(dateStr);
@@ -811,6 +852,7 @@ function deadlineLabelSched(days, dateStr){
   return`Due ${dateFormatted} (${days}d left)`;
 }
 
+// Is actionable comment?
 function isActionable(text){
   const t=text.toLowerCase();
   return ["?","please","can you","could you","need","waiting","follow up",
@@ -818,6 +860,7 @@ function isActionable(text){
           "feedback","asap","urgent","done?","ready?","status"].some(k=>t.includes(k));
 }
 
+// Assign tasks to team members by current owner role
 function assignTasks(deliverables){
   const map={};
   deliverables.forEach(d=>{
@@ -828,12 +871,14 @@ function assignTasks(deliverables){
     if(role==="copywriter"&&d.copywriter?.length) who=d.copywriter;
     if(role==="designer"  &&d.designer?.length)   who=d.designer;
     if(role==="uploader"  &&d.uploader)           who=[d.uploader];
+    // Fallback chain: role-specific deadline → dueDate → sendDate
     const urgencyDate=d[urgencyField] || d.dueDate || d.sendDate || null;
     const resolvedUrgencyField=d[urgencyField] ? urgencyField
       : d.dueDate ? "dueDate"
       : d.sendDate ? "sendDate"
       : urgencyField;
-    const days=daysUntilEST(urgencyDate);
+    const days=daysUntil(urgencyDate);
+    // Skip resend tasks for copywriters
     if(role==="copywriter" && /resend/i.test(d.name)) return;
     who.forEach(p=>{
       map[p.id]=map[p.id]||[];
@@ -844,6 +889,7 @@ function assignTasks(deliverables){
   return map;
 }
 
+// Fetch comments for a record
 async function fetchRecordComments(recordId) {
   try {
     const url = `https://api.airtable.com/v0/${AT_BASE}/${AT_TABLE}/${recordId}/comments?pageSize=10`;
@@ -854,15 +900,18 @@ async function fetchRecordComments(recordId) {
   } catch { return []; }
 }
 
+// Trigger a performance snapshot
 async function triggerSnapshotSrv() {
   try { await fetch(`${SERVER_URL}/snapshot`, { method: "POST" }); } catch {}
 }
 
+// Build the rich DM message (ported from dashboard)
 function buildDMMessageSrv(person,tasks,weekly){
-  const date=estTodaySrv().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+  const date=estToday().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
   const grouped={overdue:[],today:[],soon:[],later:[]};
 
   tasks.forEach(t=>{
+    // Skip tasks with no deadline
     if(t.days===null)return;
     const u=urgencyInfo(t.days);
     grouped[u.section].push({...t,u});
@@ -872,25 +921,28 @@ function buildDMMessageSrv(person,tasks,weekly){
   const attachments=[];
 
   const sectionConfig=[
-    {key:"overdue",label:"OVERDUE",           color:PRIORITY_COLORS.overdue},
-    {key:"today",  label:"DUE SOON",          color:PRIORITY_COLORS.soon},
-    {key:"soon",   label:"COMING UP",         color:PRIORITY_COLORS.later},
-    {key:"later",  label:"UPCOMING",          color:PRIORITY_COLORS.later},
+    {key:"overdue",label:"OVERDUE",           color:PRIORITY_COLOR.overdue},
+    {key:"today",  label:"DUE SOON",          color:PRIORITY_COLOR.today},
+    {key:"soon",   label:"COMING UP",         color:PRIORITY_COLOR.soon},
+    {key:"later",  label:"UPCOMING",          color:PRIORITY_COLOR.later},
   ];
 
+  // Header — simple, clean
   attachments.push({
     color:"#6D4DF4",
     blocks:[{
       type:"section",
       fields:[
         {type:"mrkdwn",text:`*${person.name}*\n${person.role}`},
-        {type:"mrkdwn",text:`*${date}*\n${total} task${total!==1?"s":""} today · <${SERVER_URL}/dashboard#user=${person.id}|📊 My Dashboard>`},
+        {type:"mrkdwn",text:`*${date}*\n${total} task${total!==1?"s":""} today · <${`${SERVER_URL}/dashboard#user=${person.id}`}|📊 My Dashboard>`},
       ]
     }]
   });
 
+  // ── Smart summary — specific, actionable, not generic ──────────
   const insights=[];
 
+  // 1. Stale tasks — use statusUpdated for accuracy, flag anything stuck ≥5 days
   [...grouped.overdue,...grouped.today,...grouped.soon].forEach(t=>{
     const statusDate=t.statusUpdated||t.createdTime;
     if(!statusDate)return;
@@ -900,9 +952,11 @@ function buildDMMessageSrv(person,tasks,weekly){
     }
   });
 
+  // 2. Blocking others — for each task, check who is waiting on this person next
   tasks.forEach(t=>{
     const ns=STATUS_ACTIONS?.[t.status];
     if(!ns)return;
+    // Only flag if the *next* role is different from this person's role
     if(ns.role===person.role.toLowerCase())return;
     let blockedName="";
     if(ns.role==="designer"  &&t.designer?.length)  blockedName=t.designer[0].name.split(" ")[0];
@@ -914,6 +968,7 @@ function buildDMMessageSrv(person,tasks,weekly){
     }
   });
 
+  // 3. Actionable comments
   tasks.filter(t=>t.comments&&t.comments.length>0).forEach(t=>{
     const latest=t.comments[0];
     const author=latest.author?.name?.split(" ")[0]||"Someone";
@@ -921,6 +976,7 @@ function buildDMMessageSrv(person,tasks,weekly){
     insights.push(`*${t.name}* — ${author} commented: _"${msg}"_`);
   });
 
+  // 4. Closing line based on urgency
   let closingLine="";
   if(grouped.overdue.length===0&&grouped.today.length===0){
     closingLine="No urgent deadlines today.";
@@ -950,6 +1006,7 @@ function buildDMMessageSrv(person,tasks,weekly){
     const items=grouped[key];
     if(!items.length)return;
 
+    // Section header + all tasks in ONE attachment = no gap between them
     const sectionBlocks=[];
     sectionBlocks.push({type:"section",text:{type:"mrkdwn",text:`*${label}*`}});
     sectionBlocks.push({type:"divider"});
@@ -970,6 +1027,7 @@ function buildDMMessageSrv(person,tasks,weekly){
       const dlFormatted=dl?(dlFieldName?`${dlFieldName}: ${dl}`:dl):null;
       const secondLine=[t.action, dlFormatted].filter(Boolean).join("   ·   ");
 
+      // Next step
       let nextStr="";
       const ns=STATUS_ACTIONS?.[t.status];
       if(ns){
@@ -981,6 +1039,7 @@ function buildDMMessageSrv(person,tasks,weekly){
         nextStr=nextPerson ? `_Next: ${nextPerson} to ${ns.action}_` : `_Next: ${ns.action}_`;
       }
 
+      // Actionable comments
       let commentStr="";
       if(t.comments&&t.comments.length){
         const lines=t.comments.map(c=>{
@@ -1012,9 +1071,12 @@ function buildDMMessageSrv(person,tasks,weekly){
     });
 
     attachments.push({color, blocks:sectionBlocks});
+
+    // Thin spacer between sections
     attachments.push({color:"#E2E2E2",blocks:[{type:"section",text:{type:"mrkdwn",text:" "}}]});
   });
 
+  // Footer
   attachments.push({
     color:"#6D4DF4",
     blocks:[{type:"context",elements:[{type:"mrkdwn",text:`*insendra*   ·   Reply in thread to flag an update`}]}]
@@ -1023,85 +1085,9 @@ function buildDMMessageSrv(person,tasks,weekly){
   return {blocks:[],attachments,text:`Task update for ${person.name}`};
 }
 
-function urgencyInfo(days){
-  if(days===null)return{section:"later"};
-  if(days<0)     return{section:"overdue"};
-  if(days===0)   return{section:"today"};
-  if(days<=3)    return{section:"today"};
-  if(days<=14)   return{section:"soon"};
-  return              {section:"later"};
-}
-
-function buildSynopsis(client, grouped){
-  const lines=[];
-  const allItems=[
-    ...(grouped.overdue||[]),
-    ...(grouped.today||[]),
-    ...(grouped.soon||[]),
-    ...(grouped.later||[])
-  ];
-
-  (grouped.overdue||[]).forEach(t=>{
-    const d=Math.abs(t.days);
-    const flag=d>=7?` This has been overdue for over a week.`:"";
-    lines.push(`*${t.name}* is ${d}d overdue — ${t.status} needs to be resolved immediately.${flag}`);
-  });
-
-  [...(grouped.today||[]),...(grouped.soon||[])].forEach(t=>{
-    const statusDate=t.statusUpdated||t.createdTime;
-    if(!statusDate)return;
-    const daysInStatus=Math.round((Date.now()-new Date(statusDate))/(86400000));
-    if(daysInStatus>=5){
-      lines.push(`*${t.name}* has been sitting in "${t.status}" for ${daysInStatus} days — this needs to progress.`);
-    }
-  });
-
-  allItems.filter(t=>t.status==="Client Review").forEach(t=>{
-    const statusDate=t.statusUpdated||t.createdTime;
-    if(!statusDate)return;
-    const waiting=Math.round((Date.now()-new Date(statusDate))/(86400000));
-    if(waiting>=3){
-      lines.push(`*${t.name}* has been with the client for ~${waiting} days — a follow-up may be needed.`);
-    }
-  });
-
-  const qaItems=allItems.filter(t=>
-    t.status==="Copywriting Complete - Ready for QA"||
-    t.status==="Design Complete - Ready for QA"
-  );
-  if(qaItems.length){
-    const names=qaItems.map(t=>t.name).join(", ");
-    lines.push(`*QA needed:* ${names}`);
-  }
-
-  allItems.filter(t=>t.comments&&t.comments.length>0).forEach(t=>{
-    const latest=t.comments[0];
-    const author=latest.author?.name?.split(" ")[0]||"Someone";
-    const msg=(latest.text||"").slice(0,100);
-    lines.push(`*${t.name}* — ${author} commented: _"${msg}"_`);
-  });
-
-  const steps=[];
-  if((grouped.overdue||[]).length)
-    steps.push("Resolve overdue items first — these are blocking the pipeline");
-  if(allItems.some(t=>t.status==="Client Review"))
-    steps.push("Follow up on client approvals — check how long each has been waiting");
-  if(qaItems.length)
-    steps.push("Clear the QA queue before it becomes a bottleneck");
-  if(allItems.some(t=>t.status==="Upload"||t.status==="Schedule"))
-    steps.push("Confirm all uploads and sends scheduled for this week are locked in");
-
-  if(steps.length){
-    lines.push("");
-    lines.push("*This week:*");
-    steps.forEach((s,i)=>lines.push(`${i+1}. ${s}`));
-  }
-
-  return lines.join("\n");
-}
-
+// Build weekly client digest message (ported from dashboard)
 function buildDigestMessageSrv(client,items){
-  const date=estTodaySrv().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+  const date=estToday().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
   const grouped={overdue:[],today:[],soon:[],later:[]};
 
   items.forEach(t=>{
@@ -1113,20 +1099,24 @@ function buildDigestMessageSrv(client,items){
   const total=grouped.overdue.length+grouped.today.length+grouped.soon.length+grouped.later.length;
   const attachments=[];
 
+  // Header card
   attachments.push({
     color:"#6D4DF4",
     blocks:[
       {type:"section",fields:[
-        {type:"mrkdwn",text:`*${client}*\nWeekly Digest`},
-        {type:"mrkdwn",text:`*${date}*\n${total} active deliverable${total!==1?"s":""}`},
+        {type:"mrkdwn",text:`*${client}*
+Weekly Digest`},
+        {type:"mrkdwn",text:`*${date}*
+${total} active deliverable${total!==1?"s":""}`},
       ]},
       {type:"context",elements:[{
         type:"mrkdwn",
-        text:`<${SERVER_URL}/dashboard#client=${encodeURIComponent(client)}|📋 View Client Dashboard>`
+        text:`<${clientDashboardURL(client)}|📋 View Client Dashboard>`
       }]}
     ]
   });
 
+  // Synopsis card
   const synopsis=buildSynopsis(client,grouped);
   if(synopsis){
     attachments.push({
@@ -1144,10 +1134,10 @@ function buildDigestMessageSrv(client,items){
   }
 
   const sectionConfig=[
-    {key:"overdue",label:"OVERDUE",           color:PRIORITY_COLORS.overdue},
-    {key:"today",  label:"DUE SOON",          color:PRIORITY_COLORS.soon},
-    {key:"soon",   label:"COMING UP",         color:PRIORITY_COLORS.later},
-    {key:"later",  label:"UPCOMING",          color:PRIORITY_COLORS.later},
+    {key:"overdue",label:"OVERDUE",           color:PRIORITY_COLOR.overdue},
+    {key:"today",  label:"DUE SOON",          color:PRIORITY_COLOR.today},
+    {key:"soon",   label:"COMING UP",         color:PRIORITY_COLOR.soon},
+    {key:"later",  label:"UPCOMING",          color:PRIORITY_COLOR.later},
   ];
 
   sectionConfig.forEach(({key,label,color})=>{
@@ -1163,6 +1153,7 @@ function buildDigestMessageSrv(client,items){
         ? deadlineLabelSched(t.days, t.urgencyDate)
         : null;
 
+      // Next step
       let nextStr="";
       const ns=STATUS_ACTIONS?.[t.status];
       if(ns){
@@ -1177,7 +1168,10 @@ function buildDigestMessageSrv(client,items){
       const sc=STATUS_ACTIONS[t.status];
       const action=sc?sc.action:"";
       const secondLine=[action,dl].filter(Boolean).join("   ·   ");
-      const fullText=nextStr?`*${t.name}*\n${secondLine}\n${nextStr}`:`*${t.name}*\n${secondLine}`;
+      const fullText=nextStr?`*${t.name}*
+${secondLine}
+${nextStr}`:`*${t.name}*
+${secondLine}`;
 
       sectionBlocks.push({
         type:"section",
@@ -1196,11 +1190,15 @@ function buildDigestMessageSrv(client,items){
     attachments.push({color:"#E2E2E2",blocks:[{type:"section",text:{type:"mrkdwn",text:" "}}]});
   });
 
+  // Footer
   attachments.push({color:"#6D4DF4",blocks:[{type:"context",elements:[{type:"mrkdwn",text:`*insendra*   ·   Reply in thread to flag an update`}]}]});
 
   return {blocks:[],attachments,text:`${client} — Weekly Digest`};
 }
 
+// Send a Slack DM via the existing sendDirectMessage function (already defined above)
+
+// Main daily run — called by scheduler
 async function runDailyDMs() {
   if (!dmsEnabled) {
     console.log("[scheduler] DMs are disabled — skipping run");
@@ -1212,12 +1210,15 @@ async function runDailyDMs() {
   try {
     await triggerSnapshotSrv();
 
+    // Fetch all deliverables
     const deliverables = await fetchAllDeliverables();
     console.log(`[scheduler] Loaded ${deliverables.length} deliverables`);
 
+    // Assign tasks to team members
     const tasks = assignTasks(deliverables);
     console.log(`[scheduler] Assigned tasks to ${Object.keys(tasks).length} team members`);
 
+    // Fetch actionable comments for all tasks
     const allTaskIds = [...new Set(Object.values(tasks).flat().map(t => t.id))];
     const commentsMap = {};
     await Promise.all(allTaskIds.map(async id => {
@@ -1226,8 +1227,10 @@ async function runDailyDMs() {
       if (actionable.length) commentsMap[id] = actionable;
     }));
 
+    // Get dynamic team
     const team = await getTeam();
 
+    // Send DMs to each team member
     let sent = 0;
     for (const [id, list] of Object.entries(tasks)) {
       const member = team[id];
@@ -1244,6 +1247,7 @@ async function runDailyDMs() {
       }
     }
 
+    // Weekly client digests on Mondays
     if (weekly) {
       const clients = await getClients();
       console.log(`[scheduler] Sending weekly digests to ${Object.keys(clients).length} clients...`);
@@ -1258,11 +1262,13 @@ async function runDailyDMs() {
           });
           if (!items.length) continue;
           const { blocks, attachments, text } = buildDigestMessageSrv(clientName, items);
-          await fetch("https://slack.com/api/chat.postMessage", {
+          const digestRes = await fetch("https://slack.com/api/chat.postMessage", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${SLACK_TOKEN}` },
             body: JSON.stringify({ channel: clientConfig.slackChannelId, text, blocks, attachments }),
           });
+          const digestJson = await digestRes.json();
+          if (!digestJson.ok) throw new Error(`Slack error: ${digestJson.error}`);
           console.log(`[scheduler] Sent weekly digest for ${clientName}`);
         } catch (err) {
           console.error(`[scheduler] Digest failed for ${clientName}:`, err.message);
@@ -1276,7 +1282,10 @@ async function runDailyDMs() {
   }
 }
 
-let lastRunDate = null;
+// Schedule daily run at 9AM EST Mon-Sat
+// Cron-style scheduler: checks every minute if it's time to run
+// More reliable than setTimeout chains across Render restarts
+let lastRunDate = null; // tracks the date (YYYY-MM-DD) of the last run
 
 function startDailyScheduler() {
   console.log("[scheduler] Cron-style scheduler started — checking every minute for 9AM EST Mon-Fri");
@@ -1285,16 +1294,18 @@ function startDailyScheduler() {
     const now = estPartsSrv();
     const hour = now.getHours();
     const minute = now.getMinutes();
-    const day = now.getDay();
+    const day = now.getDay(); // 0=Sun, 6=Sat
     const dateKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
 
+    // Only run at 9:00 AM EST, Mon-Fri, and only once per day
     if (hour === 9 && minute === 0 && day >= 1 && day <= 5 && lastRunDate !== dateKey) {
       lastRunDate = dateKey;
       console.log(`[scheduler] 9AM EST trigger fired (${dateKey})`);
       await runDailyDMs();
     }
-  }, 60 * 1000);
+  }, 60 * 1000); // check every 60 seconds
 
+  // Log next scheduled run on startup
   const now = estPartsSrv();
   const next = new Date(now);
   next.setHours(9, 0, 0, 0);
@@ -1305,6 +1316,7 @@ function startDailyScheduler() {
   console.log(`[scheduler] Next DM run in ~${hUntil}h (${nextLabel} EST)`);
 }
 
+// Keep old name as alias so app.listen call still works
 function scheduleNextDailyRun() {
   startDailyScheduler();
 }
@@ -1315,252 +1327,23 @@ app.post("/run-dms-now", async (req, res) => {
   await runDailyDMs();
 });
 
-// ── Klaviyo proxy helpers ─────────────────────────────────────────
-const KV_BASE = "https://a.klaviyo.com/api";
-const KV_REV  = "2024-10-15";
-
-function kvHeaders(key) {
-  return { Authorization: `Klaviyo-API-Key ${key}`, revision: KV_REV, Accept: "application/json" };
-}
-async function kvGet(key, path) {
-  const r = await fetch(`${KV_BASE}${path}`, { headers: kvHeaders(key) });
-  const j = await r.json();
-  if (!r.ok) console.error(`[kv GET ${path}]`, JSON.stringify(j).slice(0, 300));
-  return j;
-}
-async function kvPost(key, path, body) {
-  const r = await fetch(`${KV_BASE}${path}`, {
-    method: "POST",
-    headers: { ...kvHeaders(key), "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const j = await r.json();
-  if (!r.ok) console.error(`[kv POST ${path}]`, JSON.stringify(j).slice(0, 300));
-  return j;
-}
-
-// ── POST /klaviyo-data — main proxy ──────────────────────────────
-app.post("/klaviyo-data", async (req, res) => {
-  const { klaviyoKey } = req.body;
-  if (!klaviyoKey) return res.status(400).json({ error: "Missing klaviyoKey" });
-
-  try {
-    // ── Step 1: Account + lists/segments (fast, required) ──────────
-    const [acctRes, listRes, segRes] = await Promise.all([
-      kvGet(klaviyoKey, "/accounts/"),
-      kvGet(klaviyoKey, "/lists/?page[size]=1").catch(() => ({})),
-      kvGet(klaviyoKey, "/segments/?page[size]=1").catch(() => ({})),
-    ]);
-    const acct = acctRes.data?.[0]?.attributes ?? {};
-
-    // ── Step 2: Get conversion metric ID ───────────────────────────
-    const metricsRes = await kvGet(klaviyoKey, "/metrics/?page[size]=200&fields[metric]=name").catch(() => ({}));
-    const metrics    = metricsRes.data || [];
-    const convMetric = metrics.find(m => m.attributes?.name === "Placed Order")
-                    || metrics.find(m => /order|purchase|revenue/i.test(m.attributes?.name || ""))
-                    || null;
-    const convId = convMetric?.id || null;
-    console.log(`[kv] convId=${convId} (${convMetric?.attributes?.name}), metrics found=${metrics.length}`);
-
-    // ── Step 3: Fetch all campaigns + flows ────────────────────────
-    // Note: No status filter in URL — filter in code so we see the raw statuses
-    const [campRes, flowRes] = await Promise.all([
-      kvGet(klaviyoKey, "/campaigns/?sort=-send_time&page[size]=50&fields[campaign]=name,status,send_time,audiences"),
-      kvGet(klaviyoKey, "/flows/?page[size]=50&sort=-updated&fields[flow]=name,status,trigger_type"),
-    ]);
-
-    const allCamps = campRes.data ?? [];
-    const allFlows = flowRes.data ?? [];
-
-    // Log the actual statuses we see (helps debug)
-    const statuses = [...new Set(allCamps.map(c => c.attributes?.status))];
-    console.log(`[kv] All campaign statuses: ${statuses.join(", ")} (total ${allCamps.length})`);
-
-    // Accept all "done sending" statuses
-    const sentCamps = allCamps.filter(c => {
-      const s = (c.attributes?.status || "").toLowerCase();
-      return ["sent", "complete", "sending", "variations sent"].includes(s);
-    });
-    console.log(`[kv] Sent campaigns: ${sentCamps.length}, All flows: ${allFlows.length}`);
-
-    // ── Step 4: Campaign stats ─────────────────────────────────────
-    let campStats = {};
-    if (sentCamps.length > 0) {
-      const baseStats = ["recipients", "open_rate", "click_rate", "unsubscribe_rate", "bounce_rate"];
-      const convStats = convId ? [...baseStats, "conversions"] : baseStats;
-      const body = {
-        data: {
-          type: "campaign-values-report",
-          attributes: {
-            timeframe: { key: "last_12_months" },
-            statistics: convStats,
-            ...(convId ? {
-              conversion_metric_id: convId,
-              value_statistics: ["conversion_value", "revenue_per_recipient", "average_order_value"],
-            } : {}),
-          },
-        },
-      };
-      campStats = await kvPost(klaviyoKey, "/campaign-values-reports/", body).catch(e => {
-        console.error("[kv] camp-stats failed:", e.message); return {};
-      });
-      console.log(`[kv] campStats results: ${campStats.data?.attributes?.results?.length ?? "err"}`);
-    }
-
-    // ── Step 5: Flow stats ─────────────────────────────────────────
-    let flowStats = {};
-    if (allFlows.length > 0) {
-      const baseStats = ["recipients", "open_rate", "click_rate"];
-      const convStats = convId ? [...baseStats, "conversions"] : baseStats;
-      const body = {
-        data: {
-          type: "flow-values-report",
-          attributes: {
-            timeframe: { key: "last_12_months" },
-            statistics: convStats,
-            ...(convId ? {
-              conversion_metric_id: convId,
-              value_statistics: ["conversion_value", "revenue_per_recipient"],
-            } : {}),
-          },
-        },
-      };
-      flowStats = await kvPost(klaviyoKey, "/flow-values-reports/", body).catch(e => {
-        console.error("[kv] flow-stats failed:", e.message); return {};
-      });
-      console.log(`[kv] flowStats results: ${flowStats.data?.attributes?.results?.length ?? "err"}`);
-    }
-
-    // ── Step 6: Monthly revenue chart (only if convId) ─────────────
-    let monthly = [];
-    if (convId) {
-      const mRes = await kvPost(klaviyoKey, "/metric-aggregates/", {
-        data: {
-          type: "metric-aggregate",
-          attributes: {
-            metric_id: convId,
-            measurements: ["sum_value"],
-            interval: "month",
-            timeframe: { key: "last_12_months" },
-          },
-        },
-      }).catch(() => ({}));
-      const dates  = mRes.data?.attributes?.dates ?? [];
-      const points = mRes.data?.attributes?.data  ?? [];
-      monthly = dates.map((d, i) => ({
-        month:   d,
-        revenue: points.reduce((s, p) => s + (p.measurements?.sum_value?.[i] ?? 0), 0),
-      }));
-    }
-
-    // ── Step 7: Match stats to campaigns/flows ─────────────────────
-    const cs = campStats.data?.attributes?.results ?? [];
-    const fs = flowStats.data?.attributes?.results ?? [];
-
-    const campaigns = sentCamps.slice(0, 30).map(c => {
-      const result = cs.find(r => r.groupings?.campaign_id === c.id);
-      const s  = result?.statistics      ?? {};
-      const vs = result?.value_statistics ?? {};
-      return {
-        id:               c.id,
-        name:             c.attributes.name,
-        send_time:        c.attributes.send_time,
-        recipients:       s.recipients       ?? null,
-        open_rate:        s.open_rate        ?? null,
-        click_rate:       s.click_rate       ?? null,
-        unsubscribe_rate: s.unsubscribe_rate ?? null,
-        conversions:      s.conversions      ?? null,
-        revenue:          vs.conversion_value         ?? null,
-        rpr:              vs.revenue_per_recipient    ?? null,
-        aov:              vs.average_order_value      ?? null,
-      };
-    });
-
-    const flows = allFlows.map(f => {
-      const result = fs.find(r => r.groupings?.flow_id === f.id);
-      const s  = result?.statistics      ?? {};
-      const vs = result?.value_statistics ?? {};
-      return {
-        id:           f.id,
-        name:         f.attributes.name,
-        status:       f.attributes.status,
-        trigger_type: f.attributes.trigger_type,
-        recipients:   s.recipients  ?? null,
-        open_rate:    s.open_rate   ?? null,
-        click_rate:   s.click_rate  ?? null,
-        conversions:  s.conversions ?? null,
-        revenue:      vs.conversion_value      ?? null,
-        rpr:          vs.revenue_per_recipient ?? null,
-      };
-    });
-
-    res.json({
-      account: {
-        name:     acct.contact_information?.organization_name ?? "Account",
-        timezone: acct.timezone ?? "",
-        currency: acct.preferred_currency ?? "",
-      },
-      has_revenue:   !!convId,
-      conv_metric:   convMetric?.attributes?.name ?? null,
-      campaigns,
-      flows,
-      monthly,
-      list_count:    listRes.meta?.total_count  ?? (listRes.data?.length  ?? 0),
-      segment_count: segRes.meta?.total_count   ?? (segRes.data?.length   ?? 0),
-      _debug: {
-        all_campaign_count:  allCamps.length,
-        sent_campaign_count: sentCamps.length,
-        flow_count:          allFlows.length,
-        campaign_statuses:   statuses,
-        conv_metric_id:      convId,
-        conv_metric_name:    convMetric?.attributes?.name,
-        camp_stats_rows:     cs.length,
-        flow_stats_rows:     fs.length,
-      },
-    });
-  } catch (err) {
-    console.error("[klaviyo-proxy] fatal:", err.message, err.stack);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── GET /klaviyo-debug — returns raw API snapshot for debugging ───
-app.get("/klaviyo-debug", async (req, res) => {
-  const key = req.query.key;
-  if (!key) return res.status(400).json({ error: "Pass ?key=YOUR_PRIVATE_KEY" });
-  try {
-    const [camps, flows, metrics] = await Promise.all([
-      kvGet(key, "/campaigns/?sort=-send_time&page[size]=5&fields[campaign]=name,status,send_time"),
-      kvGet(key, "/flows/?page[size]=5&fields[flow]=name,status,trigger_type"),
-      kvGet(key, "/metrics/?page[size]=20&fields[metric]=name"),
-    ]);
-    res.json({
-      campaigns_sample: camps.data?.slice(0,5).map(c=>({id:c.id,...c.attributes})),
-      flows_sample:     flows.data?.slice(0,5).map(f=>({id:f.id,...f.attributes})),
-      metrics:          metrics.data?.map(m=>({id:m.id,name:m.attributes?.name})),
-    });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── GET /dashboard ────────────────────────────────────────────────
+// ── GET /dashboard ───────────────────────────────────────────────
 app.get("/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "dashboard.html"));
 });
 
-// ── NEW: GET /client-dashboard ────────────────────────────────────
-app.get("/client-dashboard", (req, res) => {
-  res.sendFile(path.join(__dirname, "client-dashboard.html"));
-});
-
 app.listen(PORT, () => {
   console.log(`Insendra server running on port ${PORT}`);
+  // Load dynamic config from Airtable on startup, then start polling
   loadDynamicConfig().then(() => {
     console.log(`[poll] Status change polling started — every ${POLL_INTERVAL_MS / 60000} minutes`);
     setTimeout(() => {
       pollForStatusChanges();
       setInterval(pollForStatusChanges, POLL_INTERVAL_MS);
     }, 30000);
+    // Refresh config every 30 minutes
     setInterval(loadDynamicConfig, CONFIG_TTL);
+    // Start daily DM scheduler
     scheduleNextDailyRun();
   });
 });
