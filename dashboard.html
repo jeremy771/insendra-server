@@ -764,6 +764,7 @@ const Chip=({children,color,bg})=>(
 // ── Team Member Dashboard ────────────────────────────────────────
 function TeamDashboard({personId}){
   const[tasks,setTasks]=useState([]);
+  const[allDeliverables,setAllDeliverables]=useState([]);
   const[perf,setPerf]=useState([]);
   const[loading,setLoading]=useState(true);
   const[member,setMember]=useState(null);
@@ -784,6 +785,7 @@ function TeamDashboard({personId}){
         const myTasks=allTasks[personId]||[];
         const me=CONFIG.team[personId]?{...CONFIG.team[personId],id:personId}:null;
         setMember(me);
+        setAllDeliverables(delivData.records||[]);
         setTasks(myTasks);
         setPerf((perfData.entries||[]).filter(e=>e.personId===personId));
 
@@ -852,7 +854,20 @@ function TeamDashboard({personId}){
     if(match)return match;
     return raw; // show raw name as last resort
   };
-  const clients=[...new Set(tasks.map(t=>{try{return resolveClient(t.client,t.name);}catch(e){return null;}}).filter(Boolean))];
+  // Derive clients from ALL deliverables where this person is assigned (any role),
+  // not just current active tasks — so clients don't disappear when there's no active work
+  const allDelivForPerson=(allDeliverables||[]).filter(d=>{
+    const isDesigner=(d.designer||[]).some(p=>p.id===personId);
+    const isCopywriter=(d.copywriter||[]).some(p=>p.id===personId);
+    const isManager=(d.manager||[]).some(p=>p.id===personId);
+    const isUploader=d.uploader?.id===personId;
+    return isDesigner||isCopywriter||isManager||isUploader;
+  });
+  const clients=[...new Set(
+    [...tasks,...allDelivForPerson]
+      .map(t=>{try{return resolveClient(t.client,t.name);}catch(e){return null;}})
+      .filter(Boolean)
+  )];
 
   // Calendar — next 30 days with tasks
   const today=estToday();
