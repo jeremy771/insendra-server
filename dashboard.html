@@ -1,312 +1,1886 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Insendra OS</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@700;800;900&family=Manrope:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    /* Deuterium Variable — self-hosted fallback chain */
-    @font-face {
-      font-family: 'Deuterium Variable';
-      src: local('Deuterium Variable'), local('DeuteriumVariable');
-      font-display: swap;
-    }
-  </style>
-  <style>
-    :root {
-      --purple:      #6D4DF4;
-      --purple-soft: #917FDD;
-      --purple-bg:   #F3F0FF;
-      --green:       #15D197;
-      --green-light: #64F2C6;
-      --green-bg:    #EDFDF7;
-      --cyan:        #17D3DD;
-      --cyan-light:  #58EBF3;
-      --cyan-bg:     #EDFBFC;
-      --pink:        #E44DF4;
-      --pink-light:  #E991F2;
-      --pink-bg:     #FDF0FF;
-      --bg:          #FFFFFF;
-      --border:      #EBEBF0;
-      --text:        #1A1025;
-      --text-mid:    #5C5475;
-      --text-dim:    #9C93B8;
-    }
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { min-height: 100%; background: #fff; color: var(--text); font-family: 'Manrope', 'Jost', sans-serif; -webkit-font-smoothing: antialiased; }
-
-    body::before {
-      content: '';
-      position: fixed;
-      top: -160px; right: -160px;
-      width: 600px; height: 600px;
-      background: radial-gradient(circle, rgba(109,77,244,0.07) 0%, transparent 70%);
-      pointer-events: none; z-index: 0;
-    }
-    body::after {
-      content: '';
-      position: fixed;
-      bottom: -100px; left: -100px;
-      width: 400px; height: 400px;
-      background: radial-gradient(circle, rgba(21,209,151,0.06) 0%, transparent 70%);
-      pointer-events: none; z-index: 0;
-    }
-
-    /* NAV */
-    .nav {
-      position: sticky; top: 0; z-index: 100;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 56px; height: 64px;
-      background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-    }
-    .nav-logo {
-      display: flex; align-items: center; gap: 10px;
-      font-family: 'Deuterium Variable', 'League Spartan', sans-serif; font-weight: 900; font-size: 18px; color: var(--text);
-    }
-    .logo-mark {
-      width: 30px; height: 30px; border-radius: 8px;
-      background: linear-gradient(135deg, var(--purple) 0%, var(--cyan) 100%);
-      display: flex; align-items: center; justify-content: center; font-size: 14px;
-    }
-    .logo-pill {
-      font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500;
-      color: var(--purple); background: var(--purple-bg);
-      padding: 2px 8px; border-radius: 100px; letter-spacing: 1.5px;
-    }
-    .nav-right { display: flex; align-items: center; gap: 20px; }
-    .nav-live {
-      display: flex; align-items: center; gap: 7px;
-      font-size: 12px; color: var(--green); font-weight: 500;
-    }
-    .live-dot {
-      width: 7px; height: 7px; border-radius: 50%; background: var(--green);
-      animation: livepulse 2s ease-in-out infinite;
-    }
-    @keyframes livepulse {
-      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(21,209,151,0.5); }
-      50%       { opacity: 0.7; box-shadow: 0 0 0 5px rgba(21,209,151,0); }
-    }
-    #clock { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); }
-
-    /* MAIN */
-    .main { position: relative; z-index: 1; max-width: 1020px; margin: 0 auto; padding: 72px 56px 100px; }
-
-    /* HERO */
-    .hero { margin-bottom: 64px; animation: rise 0.45s ease both; }
-    @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-
-    .hero-eyebrow {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-family: 'JetBrains Mono', monospace; font-size: 10px;
-      letter-spacing: 3px; text-transform: uppercase; color: var(--purple); margin-bottom: 18px;
-    }
-    .eyebrow-bar {
-      width: 28px; height: 2px; border-radius: 2px;
-      background: linear-gradient(90deg, var(--purple), var(--cyan));
-    }
-    .hero-title {
-      font-family: 'Deuterium Variable', 'League Spartan', sans-serif; font-size: clamp(40px, 5vw, 60px);
-      font-weight: 900; line-height: 1.0; color: var(--text); margin-bottom: 18px;
-    }
-    .hero-title .accent { color: var(--purple); }
-    .hero-sub { font-size: 16px; color: var(--text-mid); font-weight: 300; line-height: 1.7; max-width: 400px; font-family: 'Manrope', 'Jost', sans-serif; }
-
-    /* SECTION */
-    .section-wrap { }
-    .section-head { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
-    .section-label {
-      font-family: 'JetBrains Mono', monospace; font-size: 10px;
-      letter-spacing: 3px; text-transform: uppercase; color: var(--text-dim); white-space: nowrap;
-    }
-    .section-rule { flex: 1; height: 1px; background: var(--border); }
-
-    /* CARDS */
-    .module-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; margin-bottom: 52px; }
-
-    .module-card {
-      position: relative; background: #fff;
-      border: 1.5px solid var(--border); border-radius: 20px; padding: 32px;
-      text-decoration: none; color: inherit;
-      display: flex; flex-direction: column; overflow: hidden;
-      transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-    }
-    .module-card::after {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-      border-radius: 20px 20px 0 0; opacity: 0; transition: opacity 0.2s;
-    }
-    .card-purple::after { background: linear-gradient(90deg, var(--purple), var(--cyan-light)); }
-    .card-green::after  { background: linear-gradient(90deg, var(--green), var(--cyan)); }
-    .card-cyan::after   { background: linear-gradient(90deg, var(--cyan), var(--green-light)); }
-    .card-pink::after   { background: linear-gradient(90deg, var(--pink), var(--purple-soft)); }
-
-    .module-card:hover { transform: translateY(-3px); box-shadow: 0 14px 40px rgba(109,77,244,0.1); }
-    .card-purple:hover { border-color: var(--purple-soft); }
-    .card-green:hover  { border-color: var(--green); }
-    .card-cyan:hover   { border-color: var(--cyan); }
-    .card-pink:hover   { border-color: var(--pink-light); }
-    .module-card:hover::after { opacity: 1; }
-
-    .module-card.inactive { opacity: 0.38; cursor: default; pointer-events: none; }
-
-    .module-icon {
-      width: 52px; height: 52px; border-radius: 14px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 24px; margin-bottom: 20px; flex-shrink: 0;
-    }
-    .card-purple .module-icon { background: var(--purple-bg); }
-    .card-green  .module-icon { background: var(--green-bg); }
-    .card-cyan   .module-icon { background: var(--cyan-bg); }
-    .card-pink   .module-icon { background: var(--pink-bg); }
-
-    .status-tag {
-      display: inline-flex; align-items: center; gap: 5px;
-      font-family: 'JetBrains Mono', monospace; font-size: 9px;
-      letter-spacing: 1.5px; text-transform: uppercase; font-weight: 500;
-      padding: 3px 10px; border-radius: 100px; margin-bottom: 14px; width: fit-content;
-    }
-    .tag-live   { background: var(--green-bg);  color: var(--green);  }
-    .tag-soon   { background: var(--purple-bg); color: var(--purple); }
-    .tag-pip { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-    .tag-live .tag-pip { animation: livepulse 2s ease-in-out infinite; }
-
-    .module-name {
-      font-family: 'Deuterium Variable', 'League Spartan', sans-serif; font-size: 22px; font-weight: 800;
-      color: var(--text); margin-bottom: 10px; line-height: 1.1;
-    }
-    .module-desc { font-size: 13.5px; color: var(--text-mid); line-height: 1.7; font-weight: 400; font-family: 'Manrope', 'Jost', sans-serif; }
-
-    .module-cta {
-      margin-top: 24px; display: inline-flex; align-items: center; gap: 6px;
-      font-size: 12px; font-weight: 500;
-      opacity: 0; transform: translateX(-4px);
-      transition: opacity 0.2s, transform 0.2s;
-    }
-    .card-purple .module-cta { color: var(--purple); }
-    .card-green  .module-cta { color: var(--green); }
-    .module-card:hover .module-cta { opacity: 1; transform: translateX(0); }
-
-    /* STAGGER */
-    .active-grid   .module-card:nth-child(1) { animation: rise 0.4s 0.10s ease both; }
-    .active-grid   .module-card:nth-child(2) { animation: rise 0.4s 0.20s ease both; }
-    .coming-grid   .module-card:nth-child(1) { animation: rise 0.4s 0.12s ease both; }
-    .coming-grid   .module-card:nth-child(2) { animation: rise 0.4s 0.20s ease both; }
-    .coming-grid   .module-card:nth-child(3) { animation: rise 0.4s 0.28s ease both; }
-    .section-wrap-1 { animation: rise 0.4s 0.06s ease both; }
-    .section-wrap-2 { animation: rise 0.4s 0.12s ease both; }
-
-    /* FOOTER */
-    .footer {
-      position: relative; z-index: 1;
-      border-top: 1px solid var(--border); padding: 22px 56px;
-      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
-    }
-    .footer-left {
-      font-family: 'JetBrains Mono', monospace; font-size: 10px;
-      color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase;
-    }
-    .swatches { display: flex; gap: 5px; }
-    .sw { width: 10px; height: 10px; border-radius: 50%; }
-  </style>
+<meta charset="UTF-8"/>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='url(%23g)'/><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%236D4DF4'/><stop offset='1' stop-color='%2300C9B1'/></linearGradient></defs><text x='16' y='22' text-anchor='middle' font-family='sans-serif' font-size='18' font-weight='700' fill='white'>i</text></svg>"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Insendra — Task Automation</title>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Lexend','Segoe UI',sans-serif;background:#F7F6FF;color:#160F2E;}
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:#F7F6FF;}
+::-webkit-scrollbar-thumb{background:#E8E4FF;border-radius:2px;}
+</style>
 </head>
 <body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
 
-<nav class="nav">
-  <div class="nav-logo">
-    <div class="logo-mark">⚡</div>
-    Insendra
-    <span class="logo-pill">OS</span>
-  </div>
-  <div class="nav-right">
-    <div class="nav-live"><div class="live-dot"></div>All systems live</div>
-    <div id="clock"></div>
-  </div>
-</nav>
+const B = {
+  purple:"#6D4DF4",green:"#15D197",cyan:"#17D3DD",pink:"#E44DF4",
+  white:"#FFFFFF",pageBg:"#F7F6FF",border:"#E8E4FF",text:"#160F2E",sub:"#6C6A8A",mid:"#38305E",
+};
+const ROLE_STYLE = {
+  Manager:   {bg:"#EDEAFF",color:"#6D4DF4"},
+  Copywriter:{bg:"#DFFBF2",color:"#0D9268"},
+  Designer:  {bg:"#DAFAFC",color:"#0B8F98"},
+  Uploader:  {bg:"#FCDEFF",color:"#A61EC0"},
+};
+const CLIENT_DOTS=[B.purple,B.green,B.cyan,B.pink,"#8B5CF6"];
+const PROXY="https://insendra-server.onrender.com";
+const PRIORITY_COLOR={overdue:"#E53E3E",today:"#ED8936",soon:"#3182CE",later:"#38A169"};
 
-<main class="main">
-
-  <div class="hero">
-    <div class="hero-eyebrow"><div class="eyebrow-bar"></div>Command Center</div>
-    <h1 class="hero-title"><span id="greeting">Good morning</span>,<br><span class="accent">Jeremy.</span></h1>
-    <p class="hero-sub">Your business, one place. Pick a module below.</p>
-  </div>
-
-  <div class="section-wrap section-wrap-1">
-    <div class="section-head">
-      <div class="section-label">Active Modules</div>
-      <div class="section-rule"></div>
-    </div>
-    <div class="module-grid active-grid">
-      <a href="/accountability" class="module-card card-purple">
-        <div class="module-icon">📋</div>
-        <div class="status-tag tag-live"><div class="tag-pip"></div>Live</div>
-        <div class="module-name">Accountability Admin</div>
-        <div class="module-desc">Task and deliverable monitoring across all client accounts. Slack-integrated daily briefings and status tracking.</div>
-        <div class="module-cta">Open module →</div>
-      </a>
-      <a href="/financial" class="module-card card-green">
-        <div class="module-icon">📊</div>
-        <div class="status-tag tag-live"><div class="tag-pip"></div>Live</div>
-        <div class="module-name">Financial Overview</div>
-        <div class="module-desc">Business P&L, per-client margins, team capacity utilization, and monthly burn rate analysis.</div>
-        <div class="module-cta">Open module →</div>
-      </a>
-    </div>
-  </div>
-
-  <div class="section-wrap section-wrap-2">
-    <div class="section-head">
-      <div class="section-label">Coming Soon</div>
-      <div class="section-rule"></div>
-    </div>
-    <div class="module-grid coming-grid">
-      <div class="module-card card-cyan inactive">
-        <div class="module-icon">📈</div>
-        <div class="status-tag tag-soon"><div class="tag-pip"></div>Planned</div>
-        <div class="module-name">Client Intelligence</div>
-        <div class="module-desc">Klaviyo campaign performance, email analytics, and client health scoring across all accounts.</div>
-      </div>
-      <div class="module-card card-pink inactive">
-        <div class="module-icon">👥</div>
-        <div class="status-tag tag-soon"><div class="tag-pip"></div>Planned</div>
-        <div class="module-name">Team Ops</div>
-        <div class="module-desc">Staffing pipeline, capacity planning, and team performance management across pods.</div>
-      </div>
-      <div class="module-card card-purple inactive">
-        <div class="module-icon">🧮</div>
-        <div class="status-tag tag-soon"><div class="tag-pip"></div>Planned</div>
-        <div class="module-name">Pricing Calculator</div>
-        <div class="module-desc">Interactive new-client pricing tool with margin simulation and hiring impact modeling.</div>
-      </div>
-    </div>
-  </div>
-
-</main>
-
-<footer class="footer">
-  <div class="footer-left">Insendra OS &nbsp;·&nbsp; <span id="footerDate"></span></div>
-  <div class="swatches">
-    <div class="sw" style="background:#6D4DF4"></div>
-    <div class="sw" style="background:#15D197"></div>
-    <div class="sw" style="background:#17D3DD"></div>
-    <div class="sw" style="background:#E44DF4"></div>
-  </div>
-</footer>
-
-<script>
-  function tick() {
-    document.getElementById('clock').textContent =
-      new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+// ── EST date utilities ─────────────────────────────────────────
+const toEST=d=>{
+  // Returns a Date object adjusted to EST (UTC-5) / EDT (UTC-4) local equivalent
+  const s=typeof d==="string"?d:d instanceof Date?d.toISOString():String(d);
+  // For plain date strings "YYYY-MM-DD", treat as EST noon to avoid day shifts
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s.slice(0,10))){
+    const[y,mo,dy]=s.slice(0,10).split("-").map(Number);
+    return new Date(y,mo-1,dy,12,0,0);
   }
-  tick(); setInterval(tick, 1000);
-  document.getElementById('footerDate').textContent =
-    new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const h = new Date().getHours();
-  document.getElementById('greeting').textContent =
-    h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  return new Date(s);
+};
+const estKey=d=>{
+  const dt=toEST(d);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+};
+const estToday=()=>{
+  const now=new Date();
+  // Get current date in EST
+  const est=new Date(now.toLocaleString("en-US",{timeZone:"America/New_York"}));
+  return new Date(est.getFullYear(),est.getMonth(),est.getDate());
+};
+
+const CONFIG={
+  atBaseUrl:"https://airtable.com/appdD2UGbFIfzkj7q/tbltj1I38yoAh2HOF",
+  testUserId:"usrDi7oYvN51c0Z4H",
+  testSlackId:"U070WRQ611D",
+  team:{
+    "usrDi7oYvN51c0Z4H":{name:"Mariana Lara",      slackId:"U0AGYC9PNUR",role:"Manager"},
+    "usrov3FwJAjCJQSKY":{name:"Laryssa Wirstiuk",  slackId:"U0A9ZBD7K9B",role:"Manager"},
+    "usrP1mWmgGcgnCNTL":{name:"Jeremy Fleming",    slackId:"U070WRQ611D",role:"Manager"},
+    "usrvcB8uzTmePkrwR":{name:"Rebecca O'Sullivan",slackId:"U09863FSY72",role:"Copywriter"},
+    "usreeW420YviThfXJ":{name:"Carly Reynolds",    slackId:"U09791NT6HZ",role:"Copywriter"},
+    "usrEDbIfe8QXuzpfZ":{name:"Enrique",           slackId:"U09S1DRMWP5",role:"Designer"},
+    "usr5ml09SqVwZl6A6":{name:"Kelvin Molina",     slackId:"U09LEGUPF2S",role:"Uploader"},
+  },
+  clientChannels:{
+    "CablesAndKits":"C094NBY0Z63",
+    "Chandler 4 Corners":"C09505JBH2R",
+    "Safety Gear":"C0A1SCJ6SRX",
+    "Fore & Wharf":"C0ABCH2H1R7",
+    "Eli Health":"C09K2BKDH5H",
+  },
+  activeClients:["CablesAndKits","Chandler 4 Corners","Safety Gear","Fore & Wharf","Eli Health"],
+  // Maps current status -> what happens next
+  nextStep:{
+    "Ready for Copy":                     {action:"design",         role:"designer"},
+    "Copywriting in Progress":            {action:"design",         role:"designer"},
+    "Copywriting Complete - Ready for QA":{action:"start design",   role:"designer"},
+    "Ready For Design":                   {action:"QA design",      role:"manager"},
+    "Design Complete - Ready for QA":     {action:"upload",         role:"uploader"},
+    "Client Review":                      {action:"upload",         role:"uploader"},
+    "Upload":                             {action:"schedule",       role:"manager"},
+    "Schedule":                           {action:"send",           role:"manager"},
+  },
+  statusActions:{
+    "Ready for Copy":                     {role:"copywriter",action:"Write copy",          urgencyField:"copyDeadline"},
+    "Copywriting in Progress":            {role:"copywriter",action:"Finish copy",          urgencyField:"copyDeadline"},
+    "Copywriting Complete - Ready for QA":{role:"manager",   action:"QA copy",              urgencyField:"copyDeadline"},
+    "Ready For Design":                   {role:"designer",  action:"Start design",         urgencyField:"designDeadline"},
+    "Design in Progress":                 {role:"designer",  action:"Finish design",        urgencyField:"designDeadline"},
+    "Design Complete - Ready for QA":     {role:"manager",   action:"QA design",            urgencyField:"designDeadline"},
+    "Client Review":                      {role:"manager",   action:"Chase client approval",urgencyField:"dueDate"},
+    "Upload":                             {role:"uploader",  action:"Upload to Klaviyo",    urgencyField:"uploadDeadline"},
+    "Schedule":                           {role:"manager",   action:"Confirm schedule",     urgencyField:"sendDate"},
+  },
+};
+
+// ── Dynamic config loader ─────────────────────────────────────────
+async function loadRemoteConfig(){
+  try{
+    const PROXY=window.location.origin;
+    const res=await fetch(`${PROXY}/config`);
+    if(!res.ok)return;
+    const data=await res.json();
+    // Merge team — normalize roles to Title Case to match existing code
+    if(data.team){
+      Object.entries(data.team).forEach(([id,m])=>{
+        CONFIG.team[id]={
+          name:m.name,
+          slackId:m.slackId,
+          role:m.role.charAt(0).toUpperCase()+m.role.slice(1)
+        };
+      });
+    }
+    // Merge active clients + channels
+    if(data.clients){
+      CONFIG.activeClients=Object.keys(data.clients);
+      Object.entries(data.clients).forEach(([name,c])=>{
+        if(c.slackChannelId) CONFIG.clientChannels[name]=c.slackChannelId;
+      });
+    }
+    console.log("[config] Dynamic config loaded:",Object.keys(CONFIG.team).length,"team,",CONFIG.activeClients.length,"clients");
+  }catch(e){
+    console.warn("[config] Failed to load remote config, using defaults:",e.message);
+  }
+}
+
+function daysUntil(str){
+  if(!str)return null;
+  const d=toEST(str);if(isNaN(d))return null;
+  const n=estToday();
+  d.setHours(12,0,0,0);
+  return Math.round((d-n)/86400000);
+}
+function urgencyInfo(days){
+  if(days===null)return{section:"later"};
+  if(days<0)     return{section:"overdue"};
+  if(days===0)   return{section:"today"};
+  if(days<=3)    return{section:"today"};
+  if(days<=14)   return{section:"soon"};
+  return              {section:"later"};
+}
+function deadlineLabel(days, dateStr){
+  if(days===null||!dateStr)return null;
+  const d=new Date(dateStr);
+  const dateFormatted=d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+  if(days<0)  return`Was due ${dateFormatted} (${Math.abs(days)}d ago)`;
+  if(days===0)return`Due today`;
+  return`Due ${dateFormatted} (${days}d left)`;
+}
+const isMonday=()=>new Date().getDay()===1;
+function nextRun(){
+  const d=new Date();d.setHours(9,0,0,0);
+  if(d<=new Date())d.setDate(d.getDate()+1);
+  while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1);
+  return d;
+}
+function fmtCountdown(ms){
+  const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000),s=Math.floor((ms%60000)/1000);
+  return `${h}h ${m}m ${s}s`;
+}
+function fmtDate(str){
+  if(!str)return"—";
+  const d=new Date(str);if(isNaN(d))return"—";
+  return d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+}
+
+async function fetchDeliverables(){
+  const res=await fetch(`${PROXY}/deliverables`);
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error||`Proxy HTTP ${res.status}`);}
+  return (await res.json()).records;
+}
+async function fetchComments(recordId){
+  try{
+    const res=await fetch(`${PROXY}/comments/${recordId}`);
+    if(!res.ok)return[];
+    const data=await res.json();
+    // Return only the most recent 3 comments, newest first
+    return (data.comments||[]).reverse().slice(0,3);
+  }catch(e){return[];}
+}
+
+// Keywords that suggest a comment needs action
+function isActionable(text){
+  const t=text.toLowerCase();
+  return ["?","please","can you","could you","need","waiting","follow up",
+          "action","update","fix","change","revise","approve","review",
+          "feedback","asap","urgent","done?","ready?","status"].some(k=>t.includes(k));
+}
+
+async function fetchPerformance(){
+  try{
+    const res=await fetch(`${PROXY}/performance`);
+    if(!res.ok)return[];
+    return (await res.json()).entries||[];
+  }catch(e){return[];}
+}
+
+async function triggerSnapshot(){
+  try{
+    await fetch(`${PROXY}/snapshot`,{method:"POST"});
+  }catch(e){console.warn("Snapshot failed:",e);}
+}
+
+async function sendDM(slackUserId,blocks,attachments,text){
+  const body={slackUserId,text};
+  if(blocks)      body.blocks=blocks;
+  if(attachments) body.attachments=attachments;
+  const res=await fetch(`${PROXY}/send-dm`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const data=await res.json();
+  if(!res.ok)throw new Error(data.error||`send-dm HTTP ${res.status}`);
+  return data;
+}
+async function sendChannel(channelId,blocks,attachments,text){
+  const body={channelId,text};
+  if(blocks)      body.blocks=blocks;
+  if(attachments) body.attachments=attachments;
+  const res=await fetch(`${PROXY}/send-channel`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const data=await res.json();
+  if(!res.ok)throw new Error(data.error||`send-channel HTTP ${res.status}`);
+  return data;
+}
+
+// ── Dashboard URL helpers ────────────────────────────────────────
+const DASHBOARD_BASE = "https://insendra-server.onrender.com/dashboard";
+
+
+function teamDashboardURL(personId){
+  return `${DASHBOARD_BASE}#user=${personId}`;
+}
+function clientDashboardURL(clientSlug){
+  return `${DASHBOARD_BASE}#client=${encodeURIComponent(clientSlug)}`;
+}
+
+function buildDMMessage(person,tasks,weekly){
+  const date=estToday().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+  const grouped={overdue:[],today:[],soon:[],later:[]};
+
+  tasks.forEach(t=>{
+    // Skip tasks with no deadline
+    if(t.days===null)return;
+    const u=urgencyInfo(t.days);
+    grouped[u.section].push({...t,u});
+  });
+
+  const total=grouped.overdue.length+grouped.today.length+grouped.soon.length+grouped.later.length;
+  const attachments=[];
+
+  const sectionConfig=[
+    {key:"overdue",label:"OVERDUE",           color:PRIORITY_COLOR.overdue},
+    {key:"today",  label:"DUE SOON",          color:PRIORITY_COLOR.today},
+    {key:"soon",   label:"COMING UP",         color:PRIORITY_COLOR.soon},
+    {key:"later",  label:"UPCOMING",          color:PRIORITY_COLOR.later},
+  ];
+
+  // Header — simple, clean
+  attachments.push({
+    color:"#6D4DF4",
+    blocks:[{
+      type:"section",
+      fields:[
+        {type:"mrkdwn",text:`*${person.name}*\n${person.role}`},
+        {type:"mrkdwn",text:`*${date}*\n${total} task${total!==1?"s":""} today · <${teamDashboardURL(person.id)}|📊 My Dashboard>`},
+      ]
+    }]
+  });
+
+  // ── Smart summary — specific, actionable, not generic ──────────
+  const insights=[];
+
+  // 1. Stale tasks — use statusUpdated for accuracy, flag anything stuck ≥5 days
+  [...grouped.overdue,...grouped.today,...grouped.soon].forEach(t=>{
+    const statusDate=t.statusUpdated||t.createdTime;
+    if(!statusDate)return;
+    const daysStuck=Math.round((Date.now()-new Date(statusDate))/(86400000));
+    if(daysStuck>=5){
+      insights.push(`*${t.name}* has been in "${t.status}" for ${daysStuck} day${daysStuck!==1?"s":""} with no status change.`);
+    }
+  });
+
+  // 2. Blocking others — for each task, check who is waiting on this person next
+  tasks.forEach(t=>{
+    const ns=CONFIG.nextStep?.[t.status];
+    if(!ns)return;
+    // Only flag if the *next* role is different from this person's role
+    if(ns.role===person.role.toLowerCase())return;
+    let blockedName="";
+    if(ns.role==="designer"  &&t.designer?.length)  blockedName=t.designer[0].name.split(" ")[0];
+    if(ns.role==="copywriter"&&t.copywriter?.length) blockedName=t.copywriter[0].name.split(" ")[0];
+    if(ns.role==="uploader"  &&t.uploader)           blockedName=t.uploader.name?.split(" ")[0]||"";
+    if(ns.role==="manager"   &&t.manager?.length)    blockedName=t.manager[0].name.split(" ")[0];
+    if(blockedName){
+      insights.push(`*${t.name}* — ${blockedName} is waiting to ${ns.action} once this is done.`);
+    }
+  });
+
+  // 3. Actionable comments
+  tasks.filter(t=>t.comments&&t.comments.length>0).forEach(t=>{
+    const latest=t.comments[0];
+    const author=latest.author?.name?.split(" ")[0]||"Someone";
+    const msg=(latest.text||"").slice(0,100);
+    insights.push(`*${t.name}* — ${author} commented: _"${msg}"_`);
+  });
+
+  // 4. Closing line based on urgency
+  let closingLine="";
+  if(grouped.overdue.length===0&&grouped.today.length===0){
+    closingLine="No urgent deadlines today.";
+  } else if(grouped.overdue.length>0){
+    closingLine=`${grouped.overdue.length} item${grouped.overdue.length>1?"s":""} overdue.`;
+  } else {
+    closingLine=`${grouped.today.length} item${grouped.today.length>1?"s":""} due within 3 days.`;
+  }
+
+  const summaryText=insights.length>0
+    ? insights.join("\n")+`\n\n${closingLine}`
+    : closingLine;
+
+  attachments.push({
+    color:"#6D4DF4",
+    blocks:[{type:"section",text:{type:"mrkdwn",text:summaryText}}]
+  });
+
+  if(total===0){
+    attachments.push({color:"#6D4DF4",blocks:[
+      {type:"context",elements:[{type:"mrkdwn",text:"*insendra*"}]}
+    ]});
+    return {blocks:[],attachments,text:`Task update for ${person.name}`};
+  }
+
+  sectionConfig.forEach(({key,label,color})=>{
+    const items=grouped[key];
+    if(!items.length)return;
+
+    // Section header + all tasks in ONE attachment = no gap between them
+    const sectionBlocks=[];
+    sectionBlocks.push({type:"section",text:{type:"mrkdwn",text:`*${label}*`}});
+    sectionBlocks.push({type:"divider"});
+
+    items.forEach((t,i)=>{
+      const dl=t.days!==null && t.urgencyDate
+        ? deadlineLabel(t.days, t.urgencyDate)
+        : null;
+
+      const dlFieldName={
+        copyDeadline:"Copy deadline",
+        designDeadline:"Design deadline",
+        uploadDeadline:"Upload deadline",
+        sendDate:"Send date",
+        dueDate:"",
+      }[t.urgencyField];
+
+      const dlFormatted=dl?(dlFieldName?`${dlFieldName}: ${dl}`:dl):null;
+      const secondLine=[t.action, dlFormatted].filter(Boolean).join("   ·   ");
+
+      // Next step
+      let nextStr="";
+      const ns=CONFIG.nextStep?.[t.status];
+      if(ns){
+        let nextPerson="";
+        if(ns.role==="designer"  &&t.designer?.length)  nextPerson=t.designer[0].name.split(" ")[0];
+        if(ns.role==="uploader"  &&t.uploader)          nextPerson=t.uploader.name.split(" ")[0];
+        if(ns.role==="manager"   &&t.manager?.length)   nextPerson=t.manager[0].name.split(" ")[0];
+        if(ns.role==="copywriter"&&t.copywriter?.length) nextPerson=t.copywriter[0].name.split(" ")[0];
+        nextStr=nextPerson ? `_Next: ${nextPerson} to ${ns.action}_` : `_Next: ${ns.action}_`;
+      }
+
+      // Actionable comments
+      let commentStr="";
+      if(t.comments&&t.comments.length){
+        const lines=t.comments.map(c=>{
+          const author=c.author?.name?.split(" ")[0]||"Someone";
+          const msg=(c.text||"").slice(0,120);
+          return `_${author}: "${msg}"_`;
+        });
+        commentStr=lines.join("\n");
+      }
+
+      const fullText=[
+        `*${t.name}*`,
+        secondLine,
+        nextStr||"",
+        commentStr ? `*Comments:*\n${commentStr}` : ""
+      ].filter(Boolean).join("\n");
+
+      sectionBlocks.push({
+        type:"section",
+        text:{type:"mrkdwn",text:fullText},
+        accessory:{
+          type:"button",
+          text:{type:"plain_text",text:"Open Task",emoji:false},
+          url:`${CONFIG.atBaseUrl}/${t.id}`,
+          action_id:`open_${t.id}`,
+        }
+      });
+      if(i<items.length-1) sectionBlocks.push({type:"divider"});
+    });
+
+    attachments.push({color, blocks:sectionBlocks});
+
+    // Thin spacer between sections
+    attachments.push({color:"#E2E2E2",blocks:[{type:"section",text:{type:"mrkdwn",text:" "}}]});
+  });
+
+  // Footer
+  attachments.push({
+    color:"#6D4DF4",
+    blocks:[{type:"context",elements:[{type:"mrkdwn",text:`*insendra*   ·   Reply in thread to flag an update`}]}]
+  });
+
+  return {blocks:[],attachments,text:`Task update for ${person.name}`};
+}
+
+function buildSynopsis(client, grouped){
+  const lines=[];
+  const allItems=[
+    ...(grouped.overdue||[]),
+    ...(grouped.today||[]),
+    ...(grouped.soon||[]),
+    ...(grouped.later||[])
+  ];
+
+  // ── Specific overdue callouts ──────────────────────────────────
+  (grouped.overdue||[]).forEach(t=>{
+    const d=Math.abs(t.days);
+    const flag=d>=7?` This has been overdue for over a week.`:"";
+    lines.push(`*${t.name}* is ${d}d overdue — ${t.status} needs to be resolved immediately.${flag}`);
+  });
+
+  // ── Stale in-progress work ─────────────────────────────────────
+  [...(grouped.today||[]),...(grouped.soon||[])].forEach(t=>{
+    const statusDate=t.statusUpdated||t.createdTime;
+    if(!statusDate)return;
+    const daysInStatus=Math.round((Date.now()-new Date(statusDate))/(86400000));
+    if(daysInStatus>=5){
+      lines.push(`*${t.name}* has been sitting in "${t.status}" for ${daysInStatus} days — this needs to progress.`);
+    }
+  });
+
+  // ── Client Review age ──────────────────────────────────────────
+  allItems.filter(t=>t.status==="Client Review").forEach(t=>{
+    const statusDate=t.statusUpdated||t.createdTime;
+    if(!statusDate)return;
+    const waiting=Math.round((Date.now()-new Date(statusDate))/(86400000));
+    if(waiting>=3){
+      lines.push(`*${t.name}* has been with the client for ~${waiting} days — a follow-up may be needed.`);
+    }
+  });
+
+  // ── Work waiting on QA ─────────────────────────────────────────
+  const qaItems=allItems.filter(t=>
+    t.status==="Copywriting Complete - Ready for QA"||
+    t.status==="Design Complete - Ready for QA"
+  );
+  if(qaItems.length){
+    const names=qaItems.map(t=>t.name).join(", ");
+    lines.push(`*QA needed:* ${names}`);
+  }
+
+  // ── Actionable comments ────────────────────────────────────────
+  allItems.filter(t=>t.comments&&t.comments.length>0).forEach(t=>{
+    const latest=t.comments[0];
+    const author=latest.author?.name?.split(" ")[0]||"Someone";
+    const msg=(latest.text||"").slice(0,100);
+    lines.push(`*${t.name}* — ${author} commented: _"${msg}"_`);
+  });
+
+  // ── Recommended steps ─────────────────────────────────────────
+  const steps=[];
+  if((grouped.overdue||[]).length)
+    steps.push("Resolve overdue items first — these are blocking the pipeline");
+  if(allItems.some(t=>t.status==="Client Review"))
+    steps.push("Follow up on client approvals — check how long each has been waiting");
+  if(qaItems.length)
+    steps.push("Clear the QA queue before it becomes a bottleneck");
+  if(allItems.some(t=>t.status==="Upload"||t.status==="Schedule"))
+    steps.push("Confirm all uploads and sends scheduled for this week are locked in");
+
+  if(steps.length){
+    lines.push("");
+    lines.push("*This week:*");
+    steps.forEach((s,i)=>lines.push(`${i+1}. ${s}`));
+  }
+
+  return lines.join("\n");
+}
+
+function buildDigestMessage(client,items){
+  const date=estToday().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+  const grouped={overdue:[],today:[],soon:[],later:[]};
+
+  items.forEach(t=>{
+    if(t.days===null)return;
+    const u=urgencyInfo(t.days);
+    grouped[u.section].push({...t,u});
+  });
+
+  const total=grouped.overdue.length+grouped.today.length+grouped.soon.length+grouped.later.length;
+  const attachments=[];
+
+  // Header card
+  attachments.push({
+    color:"#6D4DF4",
+    blocks:[
+      {type:"section",fields:[
+        {type:"mrkdwn",text:`*${client}*
+Weekly Digest`},
+        {type:"mrkdwn",text:`*${date}*
+${total} active deliverable${total!==1?"s":""}`},
+      ]},
+      {type:"context",elements:[{
+        type:"mrkdwn",
+        text:`<${clientDashboardURL(client)}|📋 View Client Dashboard>`
+      }]}
+    ]
+  });
+
+  // Synopsis card
+  const synopsis=buildSynopsis(client,grouped);
+  if(synopsis){
+    attachments.push({
+      color:"#6D4DF4",
+      blocks:[{type:"section",text:{type:"mrkdwn",text:synopsis}}]
+    });
+  }
+
+  if(total===0){
+    attachments.push({color:"#6D4DF4",blocks:[
+      {type:"section",text:{type:"mrkdwn",text:"Nothing active right now."}},
+      {type:"context",elements:[{type:"mrkdwn",text:"*insendra*"}]}
+    ]});
+    return {blocks:[],attachments,text:`${client} — Weekly Digest`};
+  }
+
+  const sectionConfig=[
+    {key:"overdue",label:"OVERDUE",           color:PRIORITY_COLOR.overdue},
+    {key:"today",  label:"DUE SOON",          color:PRIORITY_COLOR.today},
+    {key:"soon",   label:"COMING UP",         color:PRIORITY_COLOR.soon},
+    {key:"later",  label:"UPCOMING",          color:PRIORITY_COLOR.later},
+  ];
+
+  sectionConfig.forEach(({key,label,color})=>{
+    const items=grouped[key];
+    if(!items.length)return;
+
+    const sectionBlocks=[];
+    sectionBlocks.push({type:"section",text:{type:"mrkdwn",text:`*${label}*`}});
+    sectionBlocks.push({type:"divider"});
+
+    items.forEach((t,i)=>{
+      const dl=t.days!==null && t.urgencyDate
+        ? deadlineLabel(t.days, t.urgencyDate)
+        : null;
+
+      // Next step
+      let nextStr="";
+      const ns=CONFIG.nextStep?.[t.status];
+      if(ns){
+        let nextPerson="";
+        if(ns.role==="designer"  &&t.designer?.length)  nextPerson=t.designer[0].name.split(" ")[0];
+        if(ns.role==="uploader"  &&t.uploader)          nextPerson=t.uploader.name.split(" ")[0];
+        if(ns.role==="manager"   &&t.manager?.length)   nextPerson=t.manager[0].name.split(" ")[0];
+        if(ns.role==="copywriter"&&t.copywriter?.length) nextPerson=t.copywriter[0].name.split(" ")[0];
+        nextStr=nextPerson?`_Next: ${nextPerson} to ${ns.action}_`:`_Next: ${ns.action}_`;
+      }
+
+      const sc=CONFIG.statusActions[t.status];
+      const action=sc?sc.action:"";
+      const secondLine=[action,dl].filter(Boolean).join("   ·   ");
+      const fullText=nextStr?`*${t.name}*
+${secondLine}
+${nextStr}`:`*${t.name}*
+${secondLine}`;
+
+      sectionBlocks.push({
+        type:"section",
+        text:{type:"mrkdwn",text:fullText},
+        accessory:{
+          type:"button",
+          text:{type:"plain_text",text:"Open Task",emoji:false},
+          url:`${CONFIG.atBaseUrl}/${t.id}`,
+          action_id:`open_${t.id}`,
+        }
+      });
+      if(i<items.length-1)sectionBlocks.push({type:"divider"});
+    });
+
+    attachments.push({color,blocks:sectionBlocks});
+    attachments.push({color:"#E2E2E2",blocks:[{type:"section",text:{type:"mrkdwn",text:" "}}]});
+  });
+
+  // Footer
+  attachments.push({color:"#6D4DF4",blocks:[{type:"context",elements:[{type:"mrkdwn",text:`*insendra*   ·   Reply in thread to flag an update`}]}]});
+
+  return {blocks:[],attachments,text:`${client} — Weekly Digest`};
+}
+
+function assignTasks(deliverables){
+  const map={};
+  deliverables.forEach(d=>{
+    const sc=CONFIG.statusActions[d.status];if(!sc)return;
+    const{role,action,urgencyField}=sc;
+    let who=[];
+    if(role==="manager"   &&d.manager?.length)   who=d.manager;
+    if(role==="copywriter"&&d.copywriter?.length) who=d.copywriter;
+    if(role==="designer"  &&d.designer?.length)   who=d.designer;
+    if(role==="uploader"  &&d.uploader)           who=[d.uploader];
+    // Fallback chain: role-specific deadline → dueDate → sendDate
+    const urgencyDate=d[urgencyField] || d.dueDate || d.sendDate || null;
+    const resolvedUrgencyField=d[urgencyField] ? urgencyField
+      : d.dueDate ? "dueDate"
+      : d.sendDate ? "sendDate"
+      : urgencyField;
+    const days=daysUntil(urgencyDate);
+    // Skip resend tasks for copywriters
+    if(role==="copywriter" && /resend/i.test(d.name)) return;
+    who.forEach(p=>{
+      map[p.id]=map[p.id]||[];
+      map[p.id].push({id:d.id,name:d.name,client:d.client,action,days,sendDate:d.sendDate,urgencyField:resolvedUrgencyField,urgencyDate,status:d.status,createdTime:d.createdTime||null,statusUpdated:d.statusUpdated||null,manager:d.manager,designer:d.designer,copywriter:d.copywriter,uploader:d.uploader});
+    });
+  });
+  Object.values(map).forEach(arr=>arr.sort((a,b)=>(a.days??999)-(b.days??999)));
+  return map;
+}
+
+async function run(log,testMode=false){
+  const weekly=isMonday();
+  log({msg:`Starting ${testMode?"[TEST] ":""}${weekly?"weekly":"daily"} run...`,t:"head"});
+  await triggerSnapshot();
+  log({msg:"Snapshot saved for performance tracking",t:"info"});
+  if(testMode)log({msg:`Test mode — sending ${CONFIG.team[CONFIG.testUserId]?.name.split(" ")[0]}'s tasks to Jeremy`,t:"info"});
+  log({msg:"Fetching deliverables...",t:"info"});
+  let deliverables;
+  try{
+    deliverables=await fetchDeliverables();
+    log({msg:`Loaded ${deliverables.length} deliverables`,t:"ok"});
+  }catch(e){log({msg:`Airtable fetch failed: ${e.message}`,t:"err"});return;}
+  const tasks=assignTasks(deliverables);
+  log({msg:`Assigned tasks to ${Object.keys(tasks).length} team members`,t:"info"});
+  // Fetch comments for all unique task IDs upfront
+  const allTaskIds=[...new Set(Object.values(tasks).flat().map(t=>t.id))];
+  log({msg:`Fetching comments for ${allTaskIds.length} tasks...`,t:"info"});
+  const commentsMap={};
+  await Promise.all(allTaskIds.map(async id=>{
+    const comments=await fetchComments(id);
+    const actionable=comments.filter(c=>isActionable(c.text||""));
+    if(actionable.length)commentsMap[id]=actionable;
+  }));
+  const withComments=Object.keys(commentsMap).length;
+  if(withComments)log({msg:`Found actionable comments on ${withComments} task${withComments!==1?"s":""}`,t:"ok"});
+
+  for(const[id,list]of Object.entries(tasks)){
+    const m={...CONFIG.team[id],id};if(!m.name)continue;
+    if(testMode&&id!==CONFIG.testUserId){log({msg:`Skipped ${m.name}`,t:"info"});continue;}
+    try{
+      // Attach comments to each task
+      const listWithComments=list.map(t=>({...t,comments:commentsMap[t.id]||[]}));
+      const{blocks,attachments,text}=buildDMMessage(m,listWithComments,weekly);
+      const slackTarget=testMode?CONFIG.testSlackId:m.slackId;
+      await sendDM(slackTarget,blocks,attachments,text);
+      log({msg:`Sent to ${testMode?"Jeremy (as "+m.name+")":m.name} — ${list.length} task${list.length!==1?"s":""}`,t:"ok"});
+    }catch(e){log({msg:`Error sending to ${m.name}: ${e.message}`,t:"err"});}
+  }
+  if(weekly&&!testMode){
+    log({msg:"Sending client digests...",t:"info"});
+    const wkPrefixMap={
+      "ELI":"Eli Health","C4C":"Chandler 4 Corners","SG":"Safety Gear",
+      "FW":"Fore & Wharf","CAK":"CablesAndKits","CK":"CablesAndKits","CAB":"CablesAndKits"
+    };
+    const wkClientFromName=name=>{
+      const m=name&&name.match(/^\[([A-Z0-9]+)\]/);
+      return m?wkPrefixMap[m[1]]||null:null;
+    };
+    const wkNormClient=raw=>{
+      if(!raw)return null;
+      if(/^rec[A-Za-z0-9]{5,}$/.test(raw))return null;
+      const nr=raw.toLowerCase().replace(/[^a-z0-9]/g,"");
+      return CONFIG.activeClients.find(c=>c.toLowerCase().replace(/[^a-z0-9]/g,"")=== nr)||null;
+    };
+    const byClient={};
+    deliverables.forEach(d=>{
+      const clientKey=wkClientFromName(d.name)||wkNormClient(d.client);
+      if(!clientKey)return;
+      byClient[clientKey]=byClient[clientKey]||[];
+      const sc=CONFIG.statusActions[d.status];
+      byClient[clientKey].push({...d,days:daysUntil(d[sc?.urgencyField]||d.sendDate)});
+    });
+    for(const[client,items]of Object.entries(byClient)){
+      const ch=CONFIG.clientChannels[client];if(!ch)continue;
+      try{
+        const{blocks,attachments,text}=buildDigestMessage(client,items);
+        await sendChannel(ch,blocks,attachments,text);
+        log({msg:`Sent digest to #${client.toLowerCase().replace(/[\s&]/g,"")}`,t:"ok"});
+      }catch(e){log({msg:`Error: ${client}: ${e.message}`,t:"err"});}
+    }
+  }
+  log({msg:testMode?"Test complete":"Run complete",t:"ok"});
+}
+
+async function previewDigest(log, setRunning){
+  setRunning(true);
+  log({msg:"Fetching deliverables for digest preview...",t:"head"});
+  let deliverables;
+  try{
+    deliverables=await fetchDeliverables();
+    log({msg:`Loaded ${deliverables.length} deliverables`,t:"ok"});
+  }catch(e){log({msg:`Airtable fetch failed: ${e.message}`,t:"err"});setRunning(false);return;}
+
+  // Build digest for first client that has records, send to Jeremy
+  // Build prefix->client map for matching
+  const digestPrefixMap={
+    "ELI":"Eli Health","C4C":"Chandler 4 Corners","SG":"Safety Gear",
+    "FW":"Fore & Wharf","CAK":"CablesAndKits","CK":"CablesAndKits","CAB":"CablesAndKits"
+  };
+  const digestClientFromName=name=>{
+    const m=name&&name.match(/^\[([A-Z0-9]+)\]/);
+    return m?digestPrefixMap[m[1]]||null:null;
+  };
+  const normClientName=raw=>{
+    if(!raw)return null;
+    if(/^rec[A-Za-z0-9]{5,}$/.test(raw))return null;
+    const nr=raw.toLowerCase().replace(/[^a-z0-9]/g,"");
+    return CONFIG.activeClients.find(c=>c.toLowerCase().replace(/[^a-z0-9]/g,"")=== nr)||null;
+  };
+  const byClient={};
+  deliverables.forEach(d=>{
+    // Resolve client name from task name prefix or raw client field
+    const clientKey=digestClientFromName(d.name)||normClientName(d.client);
+    if(!clientKey)return;
+    byClient[clientKey]=byClient[clientKey]||[];
+    const sc=CONFIG.statusActions[d.status];
+    byClient[clientKey].push({...d,days:daysUntil(d[sc?.urgencyField]||d.sendDate)});
+  });
+
+  for(const[client,items]of Object.entries(byClient)){
+    try{
+      const{blocks,attachments,text}=buildDigestMessage(client,items);
+      await sendDM(CONFIG.testSlackId,blocks,attachments,`PREVIEW: ${text}`);
+      log({msg:`Sent ${client} digest preview to Jeremy`,t:"ok"});
+    }catch(e){log({msg:`Error: ${client}: ${e.message}`,t:"err"});}
+  }
+  log({msg:"All digest previews sent — check your Slack DMs",t:"ok"});
+  setRunning(false);
+}
+
+const Card=({children,style={}})=>(
+  <div style={{background:B.white,border:`1.5px solid ${B.border}`,borderRadius:14,padding:"18px 22px",...style}}>{children}</div>
+);
+const Label=({children})=>(
+  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.13em",textTransform:"uppercase",color:B.sub,marginBottom:11}}>{children}</div>
+);
+const Chip=({children,color,bg})=>(
+  <span style={{display:"inline-block",padding:"2px 10px",borderRadius:20,fontSize:11,fontWeight:600,color,background:bg}}>{children}</span>
+);
+
+// ── Team Member Dashboard ────────────────────────────────────────
+function TeamDashboard({personId}){
+  const[tasks,setTasks]=useState([]);
+  const[allDeliverables,setAllDeliverables]=useState([]);
+  const[perf,setPerf]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[member,setMember]=useState(null);
+  const[summary,setSummary]=useState("");
+  const[summaryLoading,setSummaryLoading]=useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      setLoading(true);
+      try{
+        const[delivRes,perfRes]=await Promise.all([
+          fetch(`${PROXY}/deliverables`),
+          fetch(`${PROXY}/performance`)
+        ]);
+        const delivData=await delivRes.json();
+        const perfData=await perfRes.json();
+        const allTasks=assignTasks(delivData.records||[]);
+        const myTasks=allTasks[personId]||[];
+        const me=CONFIG.team[personId]?{...CONFIG.team[personId],id:personId}:null;
+        setMember(me);
+        setAllDeliverables(delivData.records||[]);
+        setTasks(myTasks);
+        setPerf((perfData.entries||[]).filter(e=>e.personId===personId));
+
+        // Generate local summary based on task counts
+        try{
+          const ov=myTasks.filter(t=>t.days!==null&&t.days<0);
+          const sn=myTasks.filter(t=>t.days!==null&&t.days>=0&&t.days<=3);
+          const firstName=me?.name?.split(" ")[0]||"there";
+          let msg="";
+          if(ov.length>0) msg=`Hey ${firstName}, you have ${ov.length} overdue task${ov.length>1?"s":""} that need${ov.length===1?"s":""} immediate attention${sn.length>0?` and ${sn.length} more due within 3 days`:""}. Let's get those resolved first.`;
+          else if(sn.length>0) msg=`Hey ${firstName}, you're in good shape — no overdue tasks. You have ${sn.length} task${sn.length>1?"s":""} due within the next 3 days, so keep the momentum going.`;
+          else if(myTasks.length>0) msg=`Hey ${firstName}, you're all caught up on urgent items! Take a look at your upcoming tasks below to stay ahead of the schedule.`;
+          else msg=`Hey ${firstName}, you have no active tasks assigned right now. Check back after the next bot run.`;
+          setSummary(msg);
+        }catch(e){console.warn("Summary error",e);}
+      }catch(e){console.error(e);}
+      setLoading(false);
+    })();
+  },[personId]);
+
+  if(loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"'Lexend',sans-serif",color:B.sub}}>Loading your dashboard…</div>;
+  if(!member) return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"'Lexend',sans-serif",gap:16}}>
+      <div style={{fontSize:16,fontWeight:700,color:B.text}}>Dashboard not found</div>
+      <div style={{fontSize:13,color:B.sub}}>No team member matched this link.</div>
+      <a href="/dashboard" style={{fontSize:13,color:B.purple}}>← Back to main dashboard</a>
+    </div>
+  );
+
+  const rs=ROLE_STYLE[member.role]||ROLE_STYLE.Manager;
+  const overdue=tasks.filter(t=>t.days!==null&&t.days<0);
+  const soon=tasks.filter(t=>t.days!==null&&t.days>=0&&t.days<=3);
+  const upcoming=tasks.filter(t=>t.days!==null&&t.days>3&&t.days<=14);
+  const later=tasks.filter(t=>t.days!==null&&t.days>14);
+  // Extract client from task name prefix e.g. [ELI] -> Eli Health, [C4C] -> Chandler 4 Corners
+  const prefixMap={
+    "ELI":"Eli Health","C4C":"Chandler 4 Corners","SG":"Safety Gear",
+    "FW":"Fore & Wharf","CAK":"CablesAndKits","CK":"CablesAndKits",
+    "CAB":"CablesAndKits","CABLES":"CablesAndKits",
+    "CH":"Chandler 4 Corners","CHAN":"Chandler 4 Corners",
+    "SAFETY":"Safety Gear","FORE":"Fore & Wharf","WHARF":"Fore & Wharf",
+    "EH":"Eli Health","ELI":"Eli Health"
+  };
+  const clientFromName=name=>{
+    const m=name&&name.match(/^\[([A-Z0-9]+)\]/);
+    return m?prefixMap[m[1]]||null:null;
+  };
+  const clientNameMap={};
+  Object.keys(CONFIG.clientChannels||{}).forEach(name=>{
+    clientNameMap[name.toLowerCase().replace(/[^a-z0-9]/g,"")]=name;
+  });
+  const resolveClient=(raw,taskName)=>{
+    // Try task name prefix first (most reliable)
+    const fromName=clientFromName(taskName);
+    if(fromName)return fromName;
+    // Skip record IDs
+    if(!raw||/^rec[A-Za-z0-9]{5,}$/.test(raw))return null;
+    // Try normalizing against CONFIG client names
+    const norm=raw.toLowerCase().replace(/[^a-z0-9]/g,"");
+    if(clientNameMap[norm])return clientNameMap[norm];
+    // Try partial match against CONFIG keys
+    const match=Object.keys(CONFIG.clientChannels||{}).find(k=>
+      k.toLowerCase().replace(/[^a-z0-9]/g,"").includes(norm)||
+      norm.includes(k.toLowerCase().replace(/[^a-z0-9]/g,""))
+    );
+    if(match)return match;
+    return raw; // show raw name as last resort
+  };
+  // Derive clients from ALL deliverables where this person is assigned (any role),
+  // not just current active tasks — so clients don't disappear when there's no active work
+  const allDelivForPerson=(allDeliverables||[]).filter(d=>{
+    const isDesigner=(d.designer||[]).some(p=>p.id===personId);
+    const isCopywriter=(d.copywriter||[]).some(p=>p.id===personId);
+    const isManager=(d.manager||[]).some(p=>p.id===personId);
+    const isUploader=d.uploader?.id===personId;
+    return isDesigner||isCopywriter||isManager||isUploader;
+  });
+  const clients=[...new Set(
+    [...tasks,...allDelivForPerson]
+      .map(t=>{try{return resolveClient(t.client,t.name);}catch(e){return null;}})
+      .filter(Boolean)
+  )];
+
+  // Calendar — next 30 days with tasks
+  const today=estToday();
+  const calDays=Array.from({length:30},(_,i)=>{
+    const d=new Date(today);d.setDate(today.getDate()+i);
+    return d;
+  });
+  const tasksByDate={};
+  tasks.filter(t=>t.urgencyDate).forEach(t=>{
+    try{
+      const key=estKey(t.urgencyDate);
+      tasksByDate[key]=tasksByDate[key]||[];
+      tasksByDate[key].push(t);
+    }catch(e){}
+  });
+
+  // Perf stats
+  const now=new Date();
+  const thisMonth=now.toISOString().slice(0,7);
+  const monthPerf=perf.filter(e=>e.month===thisMonth);
+  const calcRate=arr=>arr.length?Math.round(arr.filter(e=>e.onTime).length/arr.length*100):null;
+  const overallRate=calcRate(perf);
+  const monthRate=calcRate(monthPerf);
+  const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const dayOfMonth=now.getDate();
+  const expectedByNow=Math.round(perf.filter(e=>e.month===thisMonth||new Date(e.completedAt)>=new Date(now.getFullYear(),now.getMonth(),1)).length*(dayOfMonth/daysInMonth));
+  const paceStatus=monthPerf.length>=expectedByNow?"On track":monthPerf.length>=expectedByNow-1?"Slightly behind":"Behind";
+  const paceColor=paceStatus==="On track"?B.green:paceStatus==="Slightly behind"?PRIORITY_COLOR.today:PRIORITY_COLOR.overdue;
+
+  const sectionConfig=[
+    {key:"overdue",label:"OVERDUE",  color:PRIORITY_COLOR.overdue, items:overdue},
+    {key:"soon",   label:"DUE SOON", color:PRIORITY_COLOR.today,   items:soon},
+    {key:"coming", label:"COMING UP",color:PRIORITY_COLOR.soon,    items:upcoming},
+    {key:"later",  label:"UPCOMING", color:PRIORITY_COLOR.later,   items:later},
+  ];
+
+  return(
+    <div style={{fontFamily:"'Lexend',sans-serif",background:B.pageBg,minHeight:"100vh",padding:"28px 24px",maxWidth:900,margin:"0 auto"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:24}}>
+        <div style={{width:52,height:52,borderRadius:"50%",background:rs.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:700,color:rs.color}}>
+          {member.name.split(" ").map(n=>n[0]).join("").slice(0,2)}
+        </div>
+        <div>
+          <div style={{fontSize:22,fontWeight:700,color:B.text}}>{member.name}</div>
+          <Chip color={rs.color} bg={rs.bg}>{member.role}</Chip>
+        </div>
+        <div style={{marginLeft:"auto",fontSize:12,color:B.sub}}>{estToday().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</div>
+      </div>
+
+      {/* AI Summary */}
+      {(summary||summaryLoading)&&(
+        <Card style={{marginBottom:20,padding:"16px 20px",borderLeft:`4px solid ${B.purple}`}}>
+          {summaryLoading
+            ? <div style={{color:B.sub,fontSize:13,fontStyle:"italic"}}>Writing your summary…</div>
+            : <div style={{fontSize:14,color:B.text,lineHeight:1.6}}>{summary}</div>
+          }
+        </Card>
+      )}
+
+      {/* Stats row */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+        {[
+          {label:"Overdue",   value:overdue.length,  color:overdue.length>0?PRIORITY_COLOR.overdue:B.mid},
+          {label:"Due soon",  value:soon.length,     color:soon.length>0?PRIORITY_COLOR.today:B.mid},
+          {label:"Upcoming",  value:upcoming.length+later.length, color:B.purple},
+          {label:"Clients",   value:clients.length,  color:B.green},
+        ].map(s=>(
+          <Card key={s.label} style={{padding:"14px 16px",textAlign:"center"}}>
+            <div style={{fontSize:28,fontWeight:700,color:s.color}}>{s.value}</div>
+            <div style={{fontSize:11,color:B.sub,fontWeight:600}}>{s.label}</div>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
+        {/* Tasks */}
+        <div>
+          <Card style={{padding:0,overflow:"hidden"}}>
+            <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`}}>
+              <Label>My Tasks</Label>
+            </div>
+            <div style={{padding:"12px 18px"}}>
+              {sectionConfig.map(({key,label,color,items})=>{
+                if(!items.length)return null;
+                return(
+                  <div key={key} style={{marginBottom:14}}>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color,marginBottom:7}}>{label}</div>
+                    {items.map(t=>{
+                      const dlFieldName={copyDeadline:"Copy deadline",designDeadline:"Design deadline",uploadDeadline:"Upload deadline",sendDate:"Send date",dueDate:""}[t.urgencyField]||"";
+                      const dateStr=t.urgencyDate?new Date(t.urgencyDate).toLocaleDateString("en-US",{month:"short",day:"numeric"}):"";
+                      const daysStr=t.days<0?`${Math.abs(t.days)}d overdue`:t.days===0?"today":`${t.days}d left`;
+                      const deadlineStr=dateStr?`${dlFieldName?dlFieldName+": ":""}${dateStr} (${daysStr})`:"";
+                      return(
+                        <div key={t.id} style={{background:B.pageBg,border:`1.5px solid ${B.border}`,borderLeft:`3px solid ${color}`,borderRadius:8,padding:"9px 12px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:12,fontWeight:600,color:B.text,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.name}</div>
+                            <div style={{fontSize:11,color:B.sub}}>{t.action}{deadlineStr?` · ${deadlineStr}`:""}</div>
+                          </div>
+                          <a href={`${CONFIG.atBaseUrl}/${t.id}`} target="_blank" rel="noreferrer"
+                            style={{fontSize:10,fontWeight:600,color:B.purple,background:B.white,border:`1.5px solid ${B.border}`,borderRadius:6,padding:"3px 10px",textDecoration:"none",fontFamily:"'Lexend',sans-serif",flexShrink:0}}>
+                            Open
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+              {tasks.filter(t=>t.days!==null).length===0&&(
+                <div style={{textAlign:"center",padding:"20px 0",color:B.sub,fontSize:13}}>All caught up! 🎉</div>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {/* Performance */}
+          <Card style={{padding:0,overflow:"hidden"}}>
+            <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`}}>
+              <Label>Performance</Label>
+            </div>
+            <div style={{padding:"14px 18px"}}>
+              {perf.length===0?(
+                <div style={{textAlign:"center",color:B.sub,fontSize:12,fontStyle:"italic",padding:"10px 0"}}>Performance data builds up over time as tasks are completed.</div>
+              ):(
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
+                    <div style={{padding:"10px",borderRadius:8,background:B.pageBg,border:`1.5px solid ${B.border}`,textAlign:"center"}}>
+                      <div style={{fontSize:22,fontWeight:700,color:overallRate>=80?B.green:overallRate>=60?PRIORITY_COLOR.today:PRIORITY_COLOR.overdue}}>{overallRate!==null?`${overallRate}%`:"—"}</div>
+                      <div style={{fontSize:10,color:B.sub,fontWeight:600}}>All time</div>
+                      <div style={{fontSize:10,color:B.sub}}>{perf.length} tasks</div>
+                    </div>
+                    <div style={{padding:"10px",borderRadius:8,background:B.pageBg,border:`1.5px solid ${B.border}`,textAlign:"center"}}>
+                      <div style={{fontSize:22,fontWeight:700,color:monthRate>=80?B.green:monthRate>=60?PRIORITY_COLOR.today:PRIORITY_COLOR.overdue}}>{monthRate!==null?`${monthRate}%`:"—"}</div>
+                      <div style={{fontSize:10,color:B.sub,fontWeight:600}}>This month</div>
+                      <div style={{fontSize:10,color:B.sub}}>{monthPerf.length} tasks</div>
+                    </div>
+                    <div style={{padding:"10px",borderRadius:8,background:B.pageBg,border:`1.5px solid ${B.border}`,textAlign:"center"}}>
+                      <div style={{fontSize:16,fontWeight:700,color:paceColor}}>{paceStatus}</div>
+                      <div style={{fontSize:10,color:B.sub,fontWeight:600}}>Pacing</div>
+                      <div style={{fontSize:10,color:B.sub}}>{monthPerf.length} of ~{expectedByNow} expected</div>
+                    </div>
+                  </div>
+                  <div style={{fontSize:10,color:B.sub,marginBottom:6,fontWeight:600}}>RECENT COMPLETIONS</div>
+                  {perf.slice(-5).reverse().map((e,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,fontSize:11}}>
+                      <span style={{width:6,height:6,borderRadius:"50%",background:e.onTime?B.green:PRIORITY_COLOR.overdue,flexShrink:0}}/>
+                      <span style={{flex:1,color:B.mid,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.taskName}</span>
+                      <span style={{color:e.onTime?B.green:PRIORITY_COLOR.overdue,fontWeight:600,flexShrink:0}}>{e.onTime?"On time":"Late"}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </Card>
+
+          {/* Clients */}
+          <Card style={{padding:0,overflow:"hidden"}}>
+            <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`}}>
+              <Label>My Clients</Label>
+            </div>
+            <div style={{padding:"14px 18px",display:"flex",flexWrap:"wrap",gap:8}}>
+              {clients.length===0
+                ? <div style={{color:B.sub,fontSize:12}}>No active clients</div>
+                : clients.map(c=>{
+                    const dot=CLIENT_DOTS[CONFIG.activeClients?.indexOf(c)%CLIENT_DOTS.length]||B.sub;
+                    return(
+                      <a key={c} href={clientDashboardURL(c)} target="_blank"
+                        style={{display:"flex",alignItems:"center",gap:6,background:B.pageBg,border:`1.5px solid ${B.border}`,borderRadius:20,padding:"5px 12px",fontSize:12,fontWeight:600,color:B.mid,textDecoration:"none",cursor:"pointer"}}>
+                        <span style={{width:7,height:7,borderRadius:"50%",background:dot,flexShrink:0}}/>
+                        {c}
+                        <span style={{fontSize:10,color:B.purple}}>↗</span>
+                      </a>
+                    );
+                  })
+              }
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Deadline Calendar — proper month grid */}
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`}}>
+          <Label>Deadline Calendar</Label>
+        </div>
+        <div style={{padding:"16px 18px"}}>
+          {(()=>{
+            const toKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+            const todayKey=toKey(today);
+            const endDate=new Date(today);endDate.setDate(today.getDate()+30);
+            const months=[];
+            let cur=new Date(today.getFullYear(),today.getMonth(),1);
+            while(cur<=endDate){months.push(new Date(cur));cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);}
+            const dayNames=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+            return months.map(monthStart=>{
+              const monthName=monthStart.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+              const daysInMonth=new Date(monthStart.getFullYear(),monthStart.getMonth()+1,0).getDate();
+              const firstDow=monthStart.getDay();
+              const cells=[];
+              for(let i=0;i<firstDow;i++) cells.push(null);
+              for(let d=1;d<=daysInMonth;d++) cells.push(new Date(monthStart.getFullYear(),monthStart.getMonth(),d));
+              return(
+                <div key={monthName} style={{marginBottom:20}}>
+                  <div style={{fontSize:12,fontWeight:700,color:B.text,marginBottom:8}}>{monthName}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:3}}>
+                    {dayNames.map(dn=><div key={dn} style={{textAlign:"center",fontSize:9,fontWeight:700,color:B.sub,padding:"2px 0"}}>{dn}</div>)}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+                    {cells.map((d,i)=>{
+                      if(!d) return <div key={`e${i}`}/>;
+                      const key=toKey(d);
+                      const dayTasks=tasksByDate[key]||[];
+                      const isToday=key===todayKey;
+                      const hasTasks=dayTasks.length>0;
+                      const hasOverdue=dayTasks.some(t=>t.days<0);
+                      const isPast=d<today&&!isToday;
+                      const dotColor=hasOverdue?PRIORITY_COLOR.overdue:B.purple;
+                      // Only show days within our 30-day window
+                      const inRange=d>=today&&d<=endDate;
+                      if(!inRange&&!isToday) return(
+                        <div key={key} style={{padding:"6px 2px",textAlign:"center",opacity:0.25}}>
+                          <div style={{fontSize:11,color:B.sub}}>{d.getDate()}</div>
+                        </div>
+                      );
+                      return(
+                        <div key={key} title={hasTasks?dayTasks.map(t=>t.name).join(", "):""} style={{
+                          padding:"6px 2px",borderRadius:6,textAlign:"center",
+                          background:isToday?B.purple:hasTasks?B.pageBg:"transparent",
+                          border:`1.5px solid ${isToday?B.purple:hasTasks?B.border:"transparent"}`,
+                          cursor:hasTasks?"pointer":"default"
+                        }}>
+                          <div style={{fontSize:11,fontWeight:isToday?700:hasTasks?600:400,color:isToday?"#fff":hasTasks?B.text:B.mid}}>{d.getDate()}</div>
+                          {hasTasks&&<div style={{width:6,height:6,borderRadius:"50%",background:isToday?"#fff":dotColor,margin:"2px auto 0"}}/>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            });
+          })()}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ── Client Dashboard ──────────────────────────────────────────────
+function ClientDashboard({clientName}){
+  const[deliverables,setDeliverables]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[summary,setSummary]=useState("");
+  const[summaryLoading,setSummaryLoading]=useState(false);
+  const[canonicalClient,setCanonicalClient]=useState(clientName);
+
+  useEffect(()=>{
+    (async()=>{
+      setLoading(true);
+      try{
+        const res=await fetch(`${PROXY}/deliverables`);
+        const data=await res.json();
+        const normalize=s=>(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+        // Match by normalized client name OR by task name prefix
+        const prefixMapCD={
+          "ELI":"Eli Health","C4C":"Chandler 4 Corners","SG":"Safety Gear",
+          "FW":"Fore & Wharf","CAK":"CablesAndKits","CK":"CablesAndKits","CAB":"CablesAndKits"
+        };
+        const clientFromTaskName=name=>{
+          const m=name&&name.match(/^\[([A-Z0-9]+)\]/);
+          return m?prefixMapCD[m[1]]||null:null;
+        };
+        const items=(data.records||[]).filter(d=>{
+          if(normalize(d.client)===normalize(clientName))return true;
+          const fromName=clientFromTaskName(d.name||"");
+          return fromName&&normalize(fromName)===normalize(clientName);
+        });
+        // Use first matched client name as canonical
+        // Use the clientName param as canonical (it's already the display name from the URL)
+        setCanonicalClient(clientName);
+        setDeliverables(items);
+
+        // Generate local client summary
+        const inProgress=items.filter(d=>!["Complete","Client Review","Upload","Schedule"].includes(d.status)).length;
+        const inReview=items.filter(d=>d.status==="Client Review").length;
+        const nextSend=items.filter(d=>d.sendDate).sort((a,b)=>new Date(a.sendDate)-new Date(b.sendDate))[0];
+        let clientMsg=`${canonicalClient||clientName} currently has ${items.length} active deliverable${items.length!==1?"s":""}.`;
+        if(inReview>0) clientMsg+=` ${inReview} item${inReview>1?"s are":` is`} awaiting your review.`;
+        if(nextSend) clientMsg+=` Next send: ${new Date(nextSend.sendDate).toLocaleDateString("en-US",{month:"long",day:"numeric"})}.`;
+        setSummary(clientMsg);
+      }catch(e){console.error(e);}
+      setLoading(false);
+    })();
+  },[clientName]);
+
+  if(loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"'Lexend',sans-serif",color:B.sub}}>Loading dashboard…</div>;
+
+  // Sort by send date
+  const sorted=[...deliverables].sort((a,b)=>new Date(a.sendDate||"9999")-new Date(b.sendDate||"9999"));
+
+  // Calendar — next 60 days
+  const today=estToday();
+  const calDays=Array.from({length:60},(_,i)=>{const d=new Date(today);d.setDate(today.getDate()+i);return d;});
+  const sendsByDate={};
+  deliverables.filter(d=>d.sendDate).forEach(d=>{
+    const key=estKey(d.sendDate);
+    sendsByDate[key]=sendsByDate[key]||[];
+    sendsByDate[key].push(d);
+  });
+
+  const STATUS_COLOR={
+    "Complete":B.green,
+    "Client Review":"#805AD5",
+    "Design Complete - Ready for QA":B.cyan,
+    "Upload":"#3182CE",
+    "Schedule":"#2B6CB0",
+    "Ready For Design":B.orange,
+    "Design in Progress":B.orange,
+    "Copywriting Complete - Ready for QA":B.cyan,
+    "Ready for Copy":"#E53E3E",
+    "Copywriting in Progress":"#E53E3E",
+  };
+
+  return(
+    <div style={{fontFamily:"'Lexend',sans-serif",background:B.pageBg,minHeight:"100vh",padding:"28px 24px",maxWidth:960,margin:"0 auto"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:24}}>
+        <div style={{width:52,height:52,borderRadius:12,background:B.purple,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>📧</div>
+        <div>
+          <div style={{fontSize:22,fontWeight:700,color:B.text}}>{canonicalClient||clientName}</div>
+          <div style={{fontSize:13,color:B.sub}}>Campaign Dashboard · {new Date().toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
+        </div>
+        <div style={{marginLeft:"auto",background:B.purple,color:"#fff",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:600}}>
+          {deliverables.length} active deliverable{deliverables.length!==1?"s":""}
+        </div>
+      </div>
+
+      {/* AI Summary */}
+      {(summary||summaryLoading)&&(
+        <Card style={{marginBottom:20,padding:"16px 20px",borderLeft:`4px solid ${B.purple}`}}>
+          {summaryLoading
+            ? <div style={{color:B.sub,fontSize:13,fontStyle:"italic"}}>Preparing your summary…</div>
+            : <div style={{fontSize:14,color:B.text,lineHeight:1.6}}>{summary}</div>
+          }
+        </Card>
+      )}
+
+      {/* Stats — dynamic status breakdown */}
+      {(()=>{
+        const statusOrder=["Ready for Copy","Copywriting in Progress","Copywriting Complete - Ready for QA","Ready For Design","Design in Progress","Design Complete - Ready for QA","Client Review","Upload","Schedule","Complete"];
+        const statusColors={"Ready for Copy":"#E53E3E","Copywriting in Progress":"#E53E3E","Copywriting Complete - Ready for QA":B.cyan,"Ready For Design":B.orange,"Design in Progress":B.orange,"Design Complete - Ready for QA":B.cyan,"Client Review":"#805AD5","Upload":"#3182CE","Schedule":"#2B6CB0","Complete":B.green};
+        const statusLabels={"Ready for Copy":"Ready for Copy","Copywriting in Progress":"Writing Copy","Copywriting Complete - Ready for QA":"Copy QA","Ready For Design":"Ready for Design","Design in Progress":"Designing","Design Complete - Ready for QA":"Design QA","Client Review":"Client Review","Upload":"Upload","Schedule":"Schedule","Complete":"Complete"};
+        const counts={};
+        deliverables.forEach(d=>{if(d.status)counts[d.status]=(counts[d.status]||0)+1;});
+        const active=statusOrder.filter(s=>counts[s]>0);
+        const cols=Math.min(active.length,5);
+        return(
+          <div style={{display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gap:10,marginBottom:20}}>
+            {active.map(s=>(
+              <Card key={s} style={{padding:"12px 14px",textAlign:"center"}}>
+                <div style={{fontSize:26,fontWeight:700,color:statusColors[s]||B.mid}}>{counts[s]}</div>
+                <div style={{fontSize:10,color:B.sub,fontWeight:600,lineHeight:1.3,marginTop:2}}>{statusLabels[s]||s}</div>
+              </Card>
+            ))}
+          </div>
+        );
+      })()}
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
+        {/* Active deliverables */}
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`}}>
+            <Label>Active Deliverables</Label>
+          </div>
+          <div style={{padding:"12px 18px"}}>
+            {sorted.map(d=>{
+              const sc=STATUS_COLOR[d.status]||B.sub;
+              const sendStr=d.sendDate?new Date(d.sendDate).toLocaleDateString("en-US",{month:"short",day:"numeric"}):"";
+              return(
+                <div key={d.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:`1px solid ${B.border}`}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:600,color:B.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.name.replace(/^\[.*?\]\s*/,"")}</div>
+                    <div style={{fontSize:11,color:B.sub,marginTop:2}}>
+                      <span style={{background:sc+"22",color:sc,borderRadius:4,padding:"1px 6px",fontWeight:600,fontSize:10}}>{d.status}</span>
+                      {sendStr&&<span style={{marginLeft:8}}>Sends {sendStr}</span>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {sorted.length===0&&<div style={{textAlign:"center",padding:"20px 0",color:B.sub,fontSize:13}}>No active deliverables</div>}
+          </div>
+        </Card>
+
+        {/* Send Calendar — proper month grid */}
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{padding:"12px 18px",borderBottom:`1.5px solid ${B.border}`}}>
+            <Label>Send Calendar</Label>
+          </div>
+          {(()=>{
+            // Build a proper month-based calendar starting from today
+            const toKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+            const todayKey=toKey(today);
+            // Fix sendsByDate to use local dates
+            const sendsLocal={};
+            deliverables.filter(d=>d.sendDate).forEach(d=>{
+              const key=estKey(d.sendDate);
+              sendsLocal[key]=sendsLocal[key]||[];
+              sendsLocal[key].push(d);
+            });
+            // Build month grids covering next 60 days
+            const endDate=new Date(today);endDate.setDate(today.getDate()+60);
+            // Get unique months to render
+            const months=[];
+            let cur=new Date(today.getFullYear(),today.getMonth(),1);
+            while(cur<=endDate){months.push(new Date(cur));cur.setMonth(cur.getMonth()+1);}
+            const dayNames=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+            return(
+              <div style={{padding:"16px 18px"}}>
+                {months.map(monthStart=>{
+                  const monthName=monthStart.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+                  // Days in this month
+                  const daysInMonth=new Date(monthStart.getFullYear(),monthStart.getMonth()+1,0).getDate();
+                  const firstDow=monthStart.getDay(); // 0=Sun
+                  const cells=[];
+                  // Empty cells before first day
+                  for(let i=0;i<firstDow;i++) cells.push(null);
+                  for(let d=1;d<=daysInMonth;d++) cells.push(new Date(monthStart.getFullYear(),monthStart.getMonth(),d));
+                  return(
+                    <div key={monthName} style={{marginBottom:24}}>
+                      <div style={{fontSize:13,fontWeight:700,color:B.text,marginBottom:10}}>{monthName}</div>
+                      {/* Day headers */}
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
+                        {dayNames.map(dn=><div key={dn} style={{textAlign:"center",fontSize:9,fontWeight:700,color:B.sub,padding:"2px 0"}}>{dn}</div>)}
+                      </div>
+                      {/* Day cells */}
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+                        {cells.map((d,i)=>{
+                          if(!d) return <div key={`e${i}`}/>;
+                          const key=toKey(d);
+                          const sends=sendsLocal[key]||[];
+                          const isToday=key===todayKey;
+                          const hasSend=sends.length>0;
+                          const isPast=d<today&&!isToday;
+                          return(
+                            <div key={key} title={sends.map(s=>s.name.replace(/^\[.*?\]\s*/,"")).join(", ")} style={{
+                              padding:"6px 2px",borderRadius:6,textAlign:"center",
+                              background:isToday?B.purple:hasSend?"#E0F7FF":isPast?"transparent":B.white,
+                              border:`1.5px solid ${isToday?B.purple:hasSend?B.cyan:"transparent"}`,
+                              cursor:hasSend?"pointer":"default",
+                              opacity:isPast?0.4:1
+                            }}>
+                              <div style={{fontSize:11,fontWeight:isToday?700:hasSend?600:400,color:isToday?"#fff":hasSend?B.purple:B.mid}}>{d.getDate()}</div>
+                              {hasSend&&<div style={{width:5,height:5,borderRadius:"50%",background:isToday?"#fff":B.cyan,margin:"2px auto 0"}}/>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Send list */}
+                {Object.keys(sendsLocal).filter(k=>k>=todayKey).sort().length>0&&(
+                  <div style={{borderTop:`1.5px solid ${B.border}`,paddingTop:14,marginTop:4}}>
+                    <div style={{fontSize:10,fontWeight:700,color:B.sub,letterSpacing:"0.1em",marginBottom:10}}>UPCOMING SENDS</div>
+                    {Object.entries(sendsLocal).filter(([k])=>k>=todayKey).sort().slice(0,10).map(([date,items])=>(
+                      <div key={date} style={{display:"flex",gap:10,marginBottom:7,alignItems:"flex-start"}}>
+                        <div style={{fontSize:11,fontWeight:700,color:B.purple,minWidth:56}}>{new Date(date+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
+                        <div style={{flex:1}}>
+                          {items.map(t=>(
+                            <div key={t.id} style={{fontSize:11,color:B.mid,marginBottom:2}}>{t.name.replace(/^\[.*?\]\s*/,"")}</div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function App(){
+  // Load dynamic team + client config from server on mount
+  React.useEffect(()=>{ loadRemoteConfig(); },[]);
+
+  // ── URL routing ─────────────────────────────────────────────────
+  // Support both ?user=ID and #user=ID (for local file access)
+  const urlParams=new URLSearchParams(window.location.search||window.location.hash.replace("#","?"));
+  const viewUser=urlParams.get("user");
+  const viewClient=urlParams.get("client");
+  if(viewUser)   return <TeamDashboard personId={viewUser}/>;
+  if(viewClient) return <ClientDashboard clientName={decodeURIComponent(viewClient)}/>;
+
+  const[logs,setLogs]=useState([]);
+  const[teamSummary,setTeamSummary]=useState(null);
+  const[selectedMember,setSelectedMember]=useState(null);
+  const[perfData,setPerfData]=useState([]);
+  const[backfilling,setBackfilling]=useState(false);
+  const[summaryLoading,setSummaryLoading]=useState(false);
+  const[running,setRunning]=useState(false);
+  const[sched,setSched]=useState(false);
+  const[testMode,setTestMode]=useState(false);
+  const[cd,setCd]=useState("");
+  const[nr,setNr]=useState(null);
+  const[hist,setHist]=useState([]);
+  const schRef=useRef(null);
+  const cdRef=useRef(null);
+  const endRef=useRef(null);
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[logs]);
+  const log=entry=>{
+    const ts=new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    setLogs(p=>[...p,{ts,...entry}]);
+  };
+  const triggerRun=async(manual=false)=>{
+    if(running)return;
+    setRunning(true);
+    const t0=Date.now();
+    log({msg:`${manual?"Manual":"Scheduled"} run${testMode?" [TEST]":""}`,t:"head"});
+    try{
+      await run(log,testMode);
+      const dur=((Date.now()-t0)/1000).toFixed(1);
+      setHist(p=>[{time:new Date().toLocaleTimeString(),date:new Date().toLocaleDateString(),type:testMode?"Test":isMonday()?"Weekly":"Daily",dur:`${dur}s`},...p.slice(0,9)]);
+    }catch(e){log({msg:`Error: ${e.message}`,t:"err"});}
+    setRunning(false);
+  };
+  const loadSummary=async()=>{
+    setSummaryLoading(true);
+    try{
+      console.log("loadSummary: fetching deliverables...");
+      const deliverables=await fetchDeliverables();
+      console.log("loadSummary: got",deliverables.length,"deliverables");
+      const tasks=assignTasks(deliverables);
+      console.log("loadSummary: assigned tasks to",Object.keys(tasks).length,"people");
+      const summary={};
+      Object.entries(tasks).forEach(([id,list])=>{
+        const m=CONFIG.team[id];if(!m)return;
+        const counts={overdue:0,soon:0,upcoming:0,total:0};
+        list.forEach(t=>{
+          if(t.days===null)return;
+          counts.total++;
+          if(t.days<0)counts.overdue++;
+          else if(t.days<=3)counts.soon++;
+          else counts.upcoming++;
+        });
+        summary[id]={...m,airtableId:id,counts,tasks:list};
+      });
+      console.log("loadSummary: summary keys",Object.keys(summary));
+      setTeamSummary(summary);
+    }catch(e){
+      console.error("loadSummary error:",e);
+      log({msg:`Team overview error: ${e.message}`,t:"err"});
+    }
+    setSummaryLoading(false);
+  };
+
+  useEffect(()=>{
+    loadSummary();
+    fetchPerformance().then(setPerfData);
+  },[]);
+
+  const runBackfill=async()=>{
+    setBackfilling(true);
+    log({msg:"Running backfill from Jan 1, 2026...",t:"info"});
+    try{
+      const res=await fetch(`${PROXY}/backfill`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({since:"2026-01-01"})
+      });
+      const data=await res.json();
+      if(data.ok){
+        log({msg:`Backfill complete — ${data.entriesAdded} entries added from ${data.recordsFound} completed tasks`,t:"ok"});
+        const perf=await fetchPerformance();
+        setPerfData(perf);
+      } else {
+        log({msg:`Backfill error: ${data.error}`,t:"err"});
+      }
+    }catch(e){
+      log({msg:`Backfill failed: ${e.message}`,t:"err"});
+    }
+    setBackfilling(false);
+  };
+
+  const startSched=()=>{
+    if(schRef.current)return;
+    setSched(true);
+    const tick=()=>{
+      const n=nextRun();setNr(n);
+      if(cdRef.current)clearInterval(cdRef.current);
+      cdRef.current=setInterval(()=>{
+        const rem=n-Date.now();
+        if(rem<=0){clearInterval(cdRef.current);setCd("Running...");}
+        else setCd(fmtCountdown(rem));
+      },1000);
+      schRef.current=setTimeout(()=>{schRef.current=null;triggerRun(false).then(tick);},n-Date.now());
+    };
+    tick();
+    log({msg:"Scheduler started — Mon–Fri at 9:00 AM ET",t:"ok"});
+  };
+  const stopSched=()=>{
+    if(schRef.current)clearTimeout(schRef.current);
+    if(cdRef.current)clearInterval(cdRef.current);
+    schRef.current=null;setSched(false);setNr(null);setCd("");
+    log({msg:"Scheduler stopped",t:"info"});
+  };
+  const teamList=Object.entries(CONFIG.team).map(([id,m])=>({...m,id}));
+  const clientList=Object.entries(CONFIG.clientChannels);
+  const logColor={ok:B.green,err:"#DC2626",head:B.purple,info:B.mid};
+  const priorityLegend=[
+    {label:"Overdue",          color:PRIORITY_COLOR.overdue},
+    {label:"Due soon (≤3 days)",color:PRIORITY_COLOR.today},
+    {label:"Coming up (≤2 wks)",color:PRIORITY_COLOR.soon},
+    {label:"Upcoming",         color:PRIORITY_COLOR.later},
+  ];
+
+  return(
+    <div style={{minHeight:"100vh",background:B.pageBg}}>
+      <div style={{background:B.white,borderBottom:`1.5px solid ${B.border}`,height:58,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 30px",position:"sticky",top:0,zIndex:20}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:30,height:30,borderRadius:8,background:`linear-gradient(135deg,${B.purple},${B.cyan})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{color:"#fff",fontSize:15,fontWeight:700}}>i</span>
+          </div>
+          <span style={{fontWeight:700,fontSize:15,letterSpacing:"-0.02em"}}>insendra</span>
+          <span style={{width:1,height:18,background:B.border,margin:"0 8px"}}/>
+          <span style={{fontSize:13,color:B.sub}}>Task Automation</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          {testMode&&<span style={{fontSize:11,fontWeight:700,color:"#B45309",background:"#FEF3C7",padding:"3px 10px",borderRadius:20}}>TEST MODE</span>}
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:sched?B.green:"#D1D5DB",boxShadow:sched?`0 0 0 3px ${B.green}33`:""}}/>
+            <span style={{fontSize:12,fontWeight:500,color:sched?B.green:"#9CA3AF"}}>{sched?"Scheduler Active":"Scheduler Off"}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"310px 1fr",gap:22,padding:"26px 30px",maxWidth:1160,margin:"0 auto"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <Card>
+            <Label>Controls</Label>
+            <div style={{display:"flex",flexDirection:"column",gap:9}}>
+              <button onClick={()=>triggerRun(true)} disabled={running} style={{padding:"11px 0",background:running?"#F3F4F6":testMode?"#F59E0B":B.purple,color:running?"#9CA3AF":"#fff",border:"none",borderRadius:9,cursor:running?"not-allowed":"pointer",fontSize:13,fontWeight:600,fontFamily:"'Lexend',sans-serif",width:"100%",boxShadow:running?"none":`0 3px 16px ${testMode?"#F59E0B44":B.purple+"44"}`}}>
+                {running?"Running…":testMode?`Send Test (${CONFIG.team[CONFIG.testUserId]?.name.split(" ")[0]} → Jeremy)`:"Run Now — All Members"}
+              </button>
+              <button onClick={()=>previewDigest(log,setRunning)} disabled={running} style={{padding:"11px 0",background:running?"#F3F4F6":"#EEF2FF",color:running?"#9CA3AF":"#4338CA",border:"1.5px solid #C7D2FE",borderRadius:9,cursor:running?"not-allowed":"pointer",fontSize:13,fontWeight:600,fontFamily:"'Lexend',sans-serif",width:"100%"}}>
+                Preview Monday Digest → Jeremy
+              </button>
+              <button onClick={sched?stopSched:startSched} disabled={testMode} style={{padding:"11px 0",background:testMode?"#F3F4F6":sched?"#FFF4E6":"#E6FBF5",color:testMode?"#9CA3AF":sched?"#C2500A":"#0A8F6C",border:`1.5px solid ${testMode?"#E5E7EB":sched?"#FED7AA":"#6EE7B7"}`,borderRadius:9,cursor:testMode?"not-allowed":"pointer",fontSize:13,fontWeight:600,fontFamily:"'Lexend',sans-serif",width:"100%"}}>
+                {sched?"Stop Scheduler":"Start Scheduler"}
+              </button>
+            </div>
+            <div style={{marginTop:8}}>
+              <button onClick={async()=>{
+                const r=await fetch(`${PROXY}/run-dms-now`,{method:"POST"});
+                const d=await r.json();
+                alert(d.message||"Triggered — check Render logs");
+              }} style={{padding:"9px 16px",background:"#1E1B4B",color:"#FFF",border:"none",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'Lexend',sans-serif",width:"100%"}}>
+                ⚡ Trigger DMs Now (Server)
+              </button>
+            </div>
+            <div style={{marginTop:8}}>
+              {(()=>{
+                const[dmOn,setDmOn]=React.useState(true);
+                React.useEffect(()=>{
+                  fetch(`${PROXY}/dms-status`).then(r=>r.json()).then(d=>setDmOn(d.dmsEnabled)).catch(()=>{});
+                },[]);
+                return(
+                  <button onClick={async()=>{
+                    const r=await fetch(`${PROXY}/dms-toggle`,{method:"POST"});
+                    const d=await r.json();
+                    setDmOn(d.dmsEnabled);
+                  }} style={{padding:"9px 16px",background:dmOn?"#065F46":"#7F1D1D",color:"#FFF",border:"none",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'Lexend',sans-serif",width:"100%"}}>
+                    {dmOn?"🟢 DMs Enabled — Click to Pause":"🔴 DMs Paused — Click to Resume"}
+                  </button>
+                );
+              })()}
+            </div>
+            <div style={{marginTop:12,padding:"11px 14px",background:testMode?"#FFFBEB":"#F7F6FF",borderRadius:9,border:`1.5px solid ${testMode?"#FDE68A":B.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:testMode?"#B45309":B.mid}}>Test Mode</div>
+                <div style={{fontSize:11,color:B.sub,marginTop:1}}>{testMode?`${CONFIG.team[CONFIG.testUserId]?.name.split(" ")[0]}'s tasks sent to Jeremy`:"Sends to all 7 team members"}</div>
+              </div>
+              <div onClick={()=>{if(!sched)setTestMode(t=>!t);}} style={{width:40,height:22,borderRadius:11,background:testMode?"#F59E0B":"#D1D5DB",position:"relative",cursor:sched?"not-allowed":"pointer",transition:"background .2s",flexShrink:0}}>
+                <div style={{position:"absolute",top:3,left:testMode?20:3,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px #0002"}}/>
+              </div>
+            </div>
+            {sched&&nr&&(
+              <div style={{marginTop:10,padding:"11px 14px",background:B.pageBg,borderRadius:9,border:`1.5px solid ${B.border}`}}>
+                <div style={{fontSize:10,color:B.sub,marginBottom:3}}>Server scheduler</div>
+                <div style={{fontSize:13,fontWeight:600}}>Mon–Fri at 9:00 AM EST</div>
+                <div style={{fontSize:11,color:B.sub,marginTop:3}}>Runs automatically on Render — no browser needed</div>
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <Label>Message Format</Label>
+            <div style={{display:"flex",flexDirection:"column",gap:9}}>
+              {priorityLegend.map(p=>(
+                <div key={p.label} style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:4,height:24,borderRadius:2,background:p.color,flexShrink:0}}/>
+                  <span style={{fontSize:12,color:B.mid}}>{p.label}</span>
+                </div>
+              ))}
+              <div style={{marginTop:4,paddingTop:10,borderTop:`1px solid ${B.border}`,fontSize:11,color:B.sub}}>Tasks without a deadline are hidden. Each task has an "Open Task" button.</div>
+            </div>
+          </Card>
+
+          <Card>
+            <Label>Infrastructure</Label>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {[
+                {label:"Proxy Server",status:"Render",color:B.green},
+                {label:"Slack Bot",status:"Block Kit + Attachments",color:B.green},
+                {label:"Airtable",status:"All active records",color:B.green},
+                {label:"Interactive Buttons",status:"Layer 3 (soon)",color:"#F59E0B"}
+              ].map(r=>(
+                <div key={r.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:12,color:B.mid}}>{r.label}</span>
+                  <span style={{fontSize:11,fontWeight:600,color:r.color}}>{r.color===B.green?"● ":"○ "}{r.status}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card>
+            <Label>Schedule</Label>
+            {[{day:"Monday",desc:"Weekly digest to 5 client channels + DMs to all",c:B.purple},{day:"Tue–Sat",desc:"Personal DMs to all 7 team members",c:B.cyan}].map(r=>(
+              <div key={r.day} style={{display:"flex",gap:10,marginBottom:10,alignItems:"flex-start"}}>
+                <span style={{fontSize:11,fontWeight:700,color:r.c,background:r.c+"1A",padding:"2px 9px",borderRadius:5,flexShrink:0,marginTop:1}}>{r.day}</span>
+                <span style={{fontSize:12,color:B.mid,lineHeight:1.55}}>{r.desc}</span>
+              </div>
+            ))}
+          </Card>
+
+          <Card>
+            <Label>Team — {teamList.length} members</Label>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {teamList.map(m=>{
+                const rs=ROLE_STYLE[m.role]||ROLE_STYLE.Manager;
+                return(
+                  <div key={m.slackId} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:13,display:"flex",alignItems:"center",gap:6}}>
+                      {m.name}
+                      {testMode&&m.name==="Mariana Lara"&&<span style={{fontSize:10,color:"#B45309",background:"#FEF3C7",padding:"1px 6px",borderRadius:10,fontWeight:600}}>test</span>}
+                    </span>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <Chip color={rs.color} bg={rs.bg}>{m.role}</Chip>
+                      <a href={`https://insendra-server.onrender.com/dashboard#user=${m.id}`} target="_blank"
+                        style={{fontSize:10,fontWeight:600,color:B.purple,background:B.pageBg,border:`1.5px solid ${B.border}`,borderRadius:6,padding:"2px 8px",textDecoration:"none",fontFamily:"'Lexend',sans-serif"}}>
+                        Dashboard
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          <Card>
+            <Label>Active Clients — {clientList.length}</Label>
+            {clientList.map(([name],i)=>(
+              <div key={name} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:9,marginBottom:7}}>
+                <div style={{display:"flex",alignItems:"center",gap:9}}>
+                  <div style={{width:7,height:7,borderRadius:"50%",background:CLIENT_DOTS[i%CLIENT_DOTS.length],flexShrink:0}}/>
+                  <span style={{fontSize:12,color:B.mid}}>{name}</span>
+                </div>
+                <a href={`https://insendra-server.onrender.com/dashboard#client=${encodeURIComponent(name)}`} target="_blank"
+                  style={{fontSize:10,fontWeight:600,color:B.cyan,background:B.pageBg,border:`1.5px solid ${B.border}`,borderRadius:6,padding:"2px 8px",textDecoration:"none",fontFamily:"'Lexend',sans-serif"}}>
+                  Dashboard
+                </a>
+              </div>
+            ))}
+          </Card>
+        </div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+            {[
+              {label:"Team members",value:teamList.length,color:B.purple},
+              {label:"Active clients",value:clientList.length,color:B.green},
+              {label:"Weekly digest",value:"Mon",color:B.cyan},
+              {label:"Daily DMs",value:"9 AM ET",color:B.pink}
+            ].map(s=>(
+              <Card key={s.label} style={{padding:"13px 17px"}}>
+                <div style={{fontSize:10,color:B.sub,marginBottom:5}}>{s.label}</div>
+                <div style={{fontSize:22,fontWeight:700,color:s.color,letterSpacing:"-0.03em"}}>{s.value}</div>
+              </Card>
+            ))}
+          </div>
+
+          {hist.length>0&&(
+            <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(hist.length,4)},1fr)`,gap:12}}>
+              {hist.slice(0,4).map((r,i)=>(
+                <Card key={i} style={{padding:"11px 16px"}}>
+                  <div style={{fontSize:10,color:B.sub,marginBottom:4}}>{r.date} · {r.time}</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:13,fontWeight:600,color:r.type==="Test"?"#B45309":r.type==="Weekly"?B.purple:B.cyan}}>{r.type}</span>
+                    <span style={{fontSize:11,color:B.sub}}>{r.dur}</span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <Card style={{padding:0,overflow:"hidden"}}>
+            <div style={{padding:"13px 22px",borderBottom:`1.5px solid ${B.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <Label>Team Overview</Label>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={runBackfill} disabled={backfilling} style={{background:"none",border:`1.5px solid ${B.purple}`,color:B.purple,borderRadius:7,padding:"3px 12px",cursor:"pointer",fontSize:11,fontFamily:"'Lexend',sans-serif",fontWeight:600}}>{backfilling?"Backfilling…":"Backfill from Jan 1"}</button>
+                <button onClick={loadSummary} disabled={summaryLoading} style={{background:"none",border:`1.5px solid ${B.border}`,color:B.sub,borderRadius:7,padding:"3px 12px",cursor:"pointer",fontSize:11,fontFamily:"'Lexend',sans-serif",fontWeight:500}}>{summaryLoading?"Loading…":"Refresh"}</button>
+              </div>
+            </div>
+            {summaryLoading?(
+              <div style={{padding:"22px",textAlign:"center",color:B.sub,fontSize:12}}>Loading team data…</div>
+            ):teamSummary?(
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:1,background:B.border}}>
+                {Object.values(teamSummary).map(m=>{
+                  const rs=ROLE_STYLE[m.role]||ROLE_STYLE.Manager;
+                  const hasUrgent=m.counts.overdue>0||m.counts.soon>0;
+                  return(
+                    <div key={m.slackId}
+                      onClick={()=>setSelectedMember(selectedMember?.airtableId===m.airtableId?null:m)}
+                      style={{background:selectedMember?.airtableId===m.airtableId?B.pageBg:B.white,padding:"14px 18px",cursor:"pointer",transition:"background .15s",borderBottom:selectedMember?.airtableId===m.airtableId?`2px solid ${B.purple}`:"2px solid transparent"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:600,color:B.text}}>{m.name.split(" ")[0]}</div>
+                          <Chip color={rs.color} bg={rs.bg}>{m.role}</Chip>
+                        </div>
+                        {m.counts.overdue>0&&(
+                          <span style={{fontSize:11,fontWeight:700,color:"#fff",background:PRIORITY_COLOR.overdue,padding:"2px 8px",borderRadius:20}}>{m.counts.overdue} overdue</span>
+                        )}
+                      </div>
+                      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                        {m.counts.overdue>0&&(
+                          <div style={{flex:1,minWidth:60,padding:"8px 10px",borderRadius:8,background:"#FFF5F5",border:"1px solid #FED7D7",textAlign:"center"}}>
+                            <div style={{fontSize:18,fontWeight:700,color:PRIORITY_COLOR.overdue}}>{m.counts.overdue}</div>
+                            <div style={{fontSize:10,color:PRIORITY_COLOR.overdue,fontWeight:600}}>Overdue</div>
+                          </div>
+                        )}
+                        {m.counts.soon>0&&(
+                          <div style={{flex:1,minWidth:60,padding:"8px 10px",borderRadius:8,background:"#FFFAF0",border:"1px solid #FEEBC8",textAlign:"center"}}>
+                            <div style={{fontSize:18,fontWeight:700,color:PRIORITY_COLOR.today}}>{m.counts.soon}</div>
+                            <div style={{fontSize:10,color:PRIORITY_COLOR.today,fontWeight:600}}>Due soon</div>
+                          </div>
+                        )}
+                        <div style={{flex:1,minWidth:60,padding:"8px 10px",borderRadius:8,background:B.pageBg,border:`1px solid ${B.border}`,textAlign:"center"}}>
+                          <div style={{fontSize:18,fontWeight:700,color:B.purple}}>{m.counts.upcoming}</div>
+                          <div style={{fontSize:10,color:B.sub,fontWeight:600}}>Upcoming</div>
+                        </div>
+                        <div style={{flex:1,minWidth:60,padding:"8px 10px",borderRadius:8,background:B.pageBg,border:`1px solid ${B.border}`,textAlign:"center"}}>
+                          <div style={{fontSize:18,fontWeight:700,color:B.mid}}>{m.counts.total}</div>
+                          <div style={{fontSize:10,color:B.sub,fontWeight:600}}>Total</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ):(
+              <div style={{padding:"22px",textAlign:"center",color:B.sub,fontSize:12}}>No data yet</div>
+            )}
+            {selectedMember&&teamSummary&&teamSummary[selectedMember.airtableId]&&(()=>{
+              const m=teamSummary[selectedMember.airtableId];
+              const sectionConfig=[
+                {key:"overdue",label:"OVERDUE",           color:PRIORITY_COLOR.overdue,  filter:t=>t.days!==null&&t.days<0},
+                {key:"soon",   label:"DUE SOON",          color:PRIORITY_COLOR.today,    filter:t=>t.days!==null&&t.days>=0&&t.days<=3},
+                {key:"coming", label:"COMING UP",         color:PRIORITY_COLOR.soon,     filter:t=>t.days!==null&&t.days>3&&t.days<=14},
+                {key:"later",  label:"UPCOMING",          color:PRIORITY_COLOR.later,    filter:t=>t.days!==null&&t.days>14},
+              ];
+              const rs=ROLE_STYLE[m.role]||ROLE_STYLE.Manager;
+              return(
+                <div style={{borderTop:`1.5px solid ${B.border}`,background:B.pageBg,padding:"18px 22px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{fontSize:14,fontWeight:700}}>{m.name}</span>
+                      <Chip color={rs.color} bg={rs.bg}>{m.role}</Chip>
+                    </div>
+                    <button onClick={()=>setSelectedMember(null)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:B.sub,lineHeight:1}}>×</button>
+                  </div>
+                  {sectionConfig.map(({key,label,color,filter})=>{
+                    const items=m.tasks.filter(filter);
+                    if(!items.length)return null;
+                    return(
+                      <div key={key} style={{marginBottom:14}}>
+                        <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color,marginBottom:7}}>{label}</div>
+                        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                          {items.map(t=>{
+                            const dlFieldName={copyDeadline:"Copy deadline",designDeadline:"Design deadline",uploadDeadline:"Upload deadline",sendDate:"Send date",dueDate:""}[t.urgencyField]||"";
+                            const dateStr=t.urgencyDate?new Date(t.urgencyDate).toLocaleDateString("en-US",{month:"short",day:"numeric"}):"";
+                            const daysStr=t.days<0?`${Math.abs(t.days)}d overdue`:t.days===0?"today":`${t.days}d left`;
+                            const deadlineStr=dateStr?`${dlFieldName?dlFieldName+": ":""}${dateStr} (${daysStr})`:"";
+                            return(
+                              <div key={t.id} style={{background:B.white,border:`1.5px solid ${B.border}`,borderLeft:`3px solid ${color}`,borderRadius:8,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{fontSize:13,fontWeight:600,color:B.text,marginBottom:2}}>{t.name}</div>
+                                  <div style={{fontSize:12,color:B.sub}}>{t.action}{deadlineStr?`   ·   ${deadlineStr}`:""}</div>
+                                </div>
+                                <a href={`${CONFIG.atBaseUrl}/${t.id}`} target="_blank" rel="noreferrer"
+                                  style={{flexShrink:0,fontSize:11,fontWeight:600,color:B.purple,background:B.pageBg,border:`1.5px solid ${B.border}`,borderRadius:7,padding:"4px 12px",textDecoration:"none",fontFamily:"'Lexend',sans-serif"}}
+                                  onClick={e=>e.stopPropagation()}>
+                                  Open
+                                </a>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {(()=>{
+                    const entries=perfData.filter(e=>e.personId===m.airtableId);
+                    const now=new Date();
+                    const thisMonth=now.toISOString().slice(0,7);
+                    const monthEntries=entries.filter(e=>e.month===thisMonth);
+                    const calcRate=arr=>arr.length?Math.round((arr.filter(e=>e.onTime).length/arr.length)*100):null;
+                    const overallRate=calcRate(entries);
+                    const monthRate=calcRate(monthEntries);
+
+                    // Pacing — tasks completed this month vs expected pace
+                    const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+                    const dayOfMonth=now.getDate();
+                    const pace=Math.round((dayOfMonth/daysInMonth)*100);
+                    const completedThisMonth=monthEntries.length;
+                    const totalThisMonth=entries.filter(e=>e.month===thisMonth||new Date(e.completedAt)>=new Date(now.getFullYear(),now.getMonth(),1)).length;
+                    const expectedByNow=Math.round((totalThisMonth*(dayOfMonth/daysInMonth)));
+                    const paceStatus=completedThisMonth>=expectedByNow?"On track":completedThisMonth>=expectedByNow-1?"Slightly behind":"Behind";
+                    const paceColor=paceStatus==="On track"?B.green:paceStatus==="Slightly behind"?PRIORITY_COLOR.today:PRIORITY_COLOR.overdue;
+
+                    return(
+                      <div style={{marginTop:16,paddingTop:14,borderTop:`1.5px solid ${B.border}`}}>
+                        <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:B.sub,marginBottom:10}}>PERFORMANCE</div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:10}}>
+                          <div style={{padding:"10px",borderRadius:8,background:B.white,border:`1.5px solid ${B.border}`,textAlign:"center"}}>
+                            <div style={{fontSize:22,fontWeight:700,color:overallRate>=80?B.green:overallRate>=60?PRIORITY_COLOR.today:PRIORITY_COLOR.overdue}}>{overallRate!==null?`${overallRate}%`:"—"}</div>
+                            <div style={{fontSize:10,color:B.sub,fontWeight:600}}>All time</div>
+                            <div style={{fontSize:10,color:B.sub}}>{entries.length} tasks</div>
+                          </div>
+                          <div style={{padding:"10px",borderRadius:8,background:B.white,border:`1.5px solid ${B.border}`,textAlign:"center"}}>
+                            <div style={{fontSize:22,fontWeight:700,color:monthRate>=80?B.green:monthRate>=60?PRIORITY_COLOR.today:PRIORITY_COLOR.overdue}}>{monthRate!==null?`${monthRate}%`:"—"}</div>
+                            <div style={{fontSize:10,color:B.sub,fontWeight:600}}>This month</div>
+                            <div style={{fontSize:10,color:B.sub}}>{monthEntries.length} tasks</div>
+                          </div>
+                          <div style={{padding:"10px",borderRadius:8,background:B.white,border:`1.5px solid ${B.border}`,textAlign:"center"}}>
+                            <div style={{fontSize:16,fontWeight:700,color:paceColor}}>{paceStatus}</div>
+                            <div style={{fontSize:10,color:B.sub,fontWeight:600}}>Pacing</div>
+                            <div style={{fontSize:10,color:B.sub}}>{completedThisMonth} of ~{expectedByNow} expected</div>
+                          </div>
+                        </div>
+                        {entries.length===0&&(
+                          <div style={{textAlign:"center",padding:"12px 0",color:B.sub,fontSize:12,fontStyle:"italic"}}>
+                            No data yet — performance tracking starts building automatically on the next bot run.
+                          </div>
+                        )}
+                        {entries.length>0&&(()=>{
+                          const recent=entries.slice(-5).reverse();
+                          return(
+                            <div>
+                              <div style={{fontSize:10,color:B.sub,marginBottom:6,fontWeight:600}}>RECENT</div>
+                              {recent.map((e,i)=>(
+                                <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,fontSize:11}}>
+                                  <span style={{width:6,height:6,borderRadius:"50%",background:e.onTime?B.green:PRIORITY_COLOR.overdue,flexShrink:0}}/>
+                                  <span style={{flex:1,color:B.mid,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.taskName}</span>
+                                  <span style={{color:e.onTime?B.green:PRIORITY_COLOR.overdue,fontWeight:600,flexShrink:0}}>{e.onTime?"On time":"Late"}</span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })()}
+                  {m.tasks.filter(t=>t.days!==null).length===0&&(
+                    <div style={{textAlign:"center",padding:"20px 0",color:B.sub,fontSize:13}}>No active tasks right now.</div>
+                  )}
+                </div>
+              );
+            })()}
+          </Card>
+
+          <Card style={{flex:1,display:"flex",flexDirection:"column",padding:0,overflow:"hidden"}}>
+            <div style={{padding:"13px 22px",borderBottom:`1.5px solid ${B.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <Label>Activity Log</Label>
+              <button onClick={()=>setLogs([])} style={{background:"none",border:`1.5px solid ${B.border}`,color:B.sub,borderRadius:7,padding:"3px 12px",cursor:"pointer",fontSize:11,fontFamily:"'Lexend',sans-serif",fontWeight:500}}>Clear</button>
+            </div>
+            <div style={{overflowY:"auto",padding:"14px 22px",minHeight:280,maxHeight:"calc(100vh - 400px)"}}>
+              {logs.length===0?(
+                <div style={{textAlign:"center",paddingTop:44}}>
+                  <div style={{fontSize:34,marginBottom:8}}>⚡</div>
+                  <div style={{fontSize:13,color:B.sub,fontWeight:500}}>No activity yet</div>
+                  <div style={{fontSize:12,color:"#C4C2DC",marginTop:3}}>Test mode ON — sends Mariana's tasks to Jeremy</div>
+                </div>
+              ):logs.map((l,i)=>(
+                <div key={i} style={{display:"flex",gap:13,marginBottom:5,fontSize:12.5,lineHeight:1.6}}>
+                  <span style={{color:"#C4C2DC",minWidth:72,flexShrink:0,fontSize:11,paddingTop:1}}>{l.ts}</span>
+                  <span style={{color:logColor[l.t]||B.mid,fontWeight:l.t==="head"?600:400,whiteSpace:"pre-wrap"}}>{l.msg}</span>
+                </div>
+              ))}
+              <div ref={endRef}/>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>
