@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Insendra OS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --purple:      #6D4DF4;
+      --purple-soft: #917FDD;
+      --purple-bg:   #F3F0FF;
+      --green:       #15D197;
+      --green-light: #64F2C6;
+      --green-bg:    #EDFDF7;
+      --cyan:        #17D3DD;
+      --cyan-light:  #58EBF3;
+      --cyan-bg:     #EDFBFC;
+      --pink:        #E44DF4;
+      --pink-light:  #E991F2;
+      --pink-bg:     #FDF0FF;
+      --bg:          #FFFFFF;
+      --border:      #EBEBF0;
+      --text:        #1A1025;
+      --text-mid:    #5C5475;
+      --text-dim:    #9C93B8;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { min-height: 100%; background: #fff; color: var(--text); font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -160px; right: -160px;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(109,77,244,0.07) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      bottom: -100px; left: -100px;
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(21,209,151,0.06) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* NAV */
+    .nav {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 56px; height: 64px;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; color: var(--text);
+    }
+    .logo-mark {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--purple) 0%, var(--cyan) 100%);
+      display: flex; align-items: center; justify-content: center; font-size: 14px;
+    }
+    .logo-pill {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500;
+      color: var(--purple); background: var(--purple-bg);
+      padding: 2px 8px; border-radius: 100px; letter-spacing: 1.5px;
+    }
+    .nav-right { display: flex; align-items: center; gap: 20px; }
+    .nav-live {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 12px; color: var(--green); font-weight: 500;
+    }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+      animation: livepulse 2s ease-in-out infinite;
+    }
+    @keyframes livepulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(21,209,151,0.5); }
+      50%       { opacity: 0.7; box-shadow: 0 0 0 5px rgba(21,209,151,0); }
+    }
+    #clock { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); }
+
+    /* MAIN */
+    .main { position: relative; z-index: 1; max-width: 1020px; margin: 0 auto; padding: 72px 56px 100px; }
+
+    /* HERO */
+    .hero { margin-bottom: 64px; animation: rise 0.45s ease both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      letter-spacing: 3px; text-transform: uppercase; color: var(--purple); margin-bottom: 18px;
+    }
+    .eyebrow-bar {
+      width: 28px; height: 2px; border-radius: 2px;
+      background: linear-gradient(90deg, var(--purple), var(--cyan));
+    }
+    .hero-title {
+      font-family: 'Syne', sans-serif; font-size: clamp(36px, 4.5vw, 54px);
+      font-weight: 800; line-height: 1.08; color: var(--text); margin-bottom: 18px;
+    }
+    .hero-title .accent { color: var(--purple); }
+    .hero-sub { font-size: 16px; color: var(--text-mid); font-weight: 300; line-height: 1.7; max-width: 400px; }
+
+    /* SECTION */
+    .section-wrap { }
+    .section-head { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+    .section-label {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      letter-spacing: 3px; text-transform: uppercase; color: var(--text-dim); white-space: nowrap;
+    }
+    .section-rule { flex: 1; height: 1px; background: var(--border); }
+
+    /* CARDS */
+    .module-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; margin-bottom: 52px; }
+
+    .module-card {
+      position: relative; background: #fff;
+      border: 1.5px solid var(--border); border-radius: 20px; padding: 32px;
+      text-decoration: none; color: inherit;
+      display: flex; flex-direction: column; overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+    }
+    .module-card::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      border-radius: 20px 20px 0 0; opacity: 0; transition: opacity 0.2s;
+    }
+    .card-purple::after { background: linear-gradient(90deg, var(--purple), var(--cyan-light)); }
+    .card-green::after  { background: linear-gradient(90deg, var(--green), var(--cyan)); }
+    .card-cyan::after   { background: linear-gradient(90deg, var(--cyan), var(--green-light)); }
+    .card-pink::after   { background: linear-gradient(90deg, var(--pink), var(--purple-soft)); }
+
+    .module-card:hover { transform: translateY(-3px); box-shadow: 0 14px 40px rgba(109,77,244,0.1); }
+    .card-purple:hover { border-color: var(--purple-soft); }
+    .card-green:hover  { border-color: var(--green); }
+    .card-cyan:hover   { border-color: var(--cyan); }
+    .card-pink:hover   { border-color: var(--pink-light); }
+    .module-card:hover::after { opacity: 1; }
+
+    .module-card.inactive { opacity: 0.38; cursor: default; pointer-events: none; }
+
+    .module-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; margin-bottom: 20px; flex-shrink: 0;
+    }
+    .card-purple .module-icon { background: var(--purple-bg); }
+    .card-green  .module-icon { background: var(--green-bg); }
+    .card-cyan   .module-icon { background: var(--cyan-bg); }
+    .card-pink   .module-icon { background: var(--pink-bg); }
+
+    .status-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-family: 'JetBrains Mono', monospace; font-size: 9px;
+      letter-spacing: 1.5px; text-transform: uppercase; font-weight: 500;
+      padding: 3px 10px; border-radius: 100px; margin-bottom: 14px; width: fit-content;
+    }
+    .tag-live   { background: var(--green-bg);  color: var(--green);  }
+    .tag-soon   { background: var(--purple-bg); color: var(--purple); }
+    .tag-pip { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .tag-live .tag-pip { animation: livepulse 2s ease-in-out infinite; }
+
+    .module-name {
+      font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700;
+      color: var(--text); margin-bottom: 10px; line-height: 1.2;
+    }
+    .module-desc { font-size: 13.5px; color: var(--text-mid); line-height: 1.7; font-weight: 300; }
+
+    .module-cta {
+      margin-top: 24px; display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 500;
+      opacity: 0; transform: translateX(-4px);
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    .card-purple .module-cta { color: var(--purple); }
+    .card-green  .module-cta { color: var(--green); }
+    .module-card:hover .module-cta { opacity: 1; transform: translateX(0); }
+
+    /* STAGGER */
+    .active-grid   .module-card:nth-child(1) { animation: rise 0.4s 0.10s ease both; }
+    .active-grid   .module-card:nth-child(2) { animation: rise 0.4s 0.20s ease both; }
+    .coming-grid   .module-card:nth-child(1) { animation: rise 0.4s 0.12s ease both; }
+    .coming-grid   .module-card:nth-child(2) { animation: rise 0.4s 0.20s ease both; }
+    .coming-grid   .module-card:nth-child(3) { animation: rise 0.4s 0.28s ease both; }
+    .section-wrap-1 { animation: rise 0.4s 0.06s ease both; }
+    .section-wrap-2 { animation: rise 0.4s 0.12s ease both; }
+
+    /* FOOTER */
+    .footer {
+      position: relative; z-index: 1;
+      border-top: 1px solid var(--border); padding: 22px 56px;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+    }
+    .footer-left {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase;
+    }
+    .swatches { display: flex; gap: 5px; }
+    .sw { width: 10px; height: 10px; border-radius: 50%; }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-logo">
+    <div class="logo-mark">⚡</div>
+    Insendra
+    <span class="logo-pill">OS</span>
+  </div>
+  <div class="nav-right">
+    <div class="nav-live"><div class="live-dot"></div>All systems live</div>
+    <div id="clock"></div>
+  </div>
+</nav>
+
+<main class="main">
+
+  <div class="hero">
+    <div class="hero-eyebrow"><div class="eyebrow-bar"></div>Command Center</div>
+    <h1 class="hero-title"><span id="greeting">Good morning</span>,<br><span class="accent">Jeremy.</span></h1>
+    <p class="hero-sub">Your business, one place. Pick a module below.</p>
+  </div>
+
+  <div class="section-wrap section-wrap-1">
+    <div class="section-head">
+      <div class="section-label">Active Modules</div>
+      <div class="section-rule"></div>
+    </div>
+    <div class="module-grid active-grid">
+      <a href="/accountability" class="module-card card-purple">
+        <div class="module-icon">📋</div>
+        <div class="status-tag tag-live"><div class="tag-pip"></div>Live</div>
+        <div class="module-name">Accountability Admin</div>
+        <div class="module-desc">Task and deliverable monitoring across all client accounts. Slack-integrated daily briefings and status tracking.</div>
+        <div class="module-cta">Open module →</div>
+      </a>
+      <a href="/financial" class="module-card card-green">
+        <div class="module-icon">📊</div>
+        <div class="status-tag tag-live"><div class="tag-pip"></div>Live</div>
+        <div class="module-name">Financial Overview</div>
+        <div class="module-desc">Business P&L, per-client margins, team capacity utilization, and monthly burn rate analysis.</div>
+        <div class="module-cta">Open module →</div>
+      </a>
+    </div>
+  </div>
+
+  <div class="section-wrap section-wrap-2">
+    <div class="section-head">
+      <div class="section-label">Coming Soon</div>
+      <div class="section-rule"></div>
+    </div>
+    <div class="module-grid coming-grid">
+      <div class="module-card card-cyan inactive">
+        <div class="module-icon">📈</div>
+        <div class="status-tag tag-soon"><div class="tag-pip"></div>Planned</div>
+        <div class="module-name">Client Intelligence</div>
+        <div class="module-desc">Klaviyo campaign performance, email analytics, and client health scoring across all accounts.</div>
+      </div>
+      <div class="module-card card-pink inactive">
+        <div class="module-icon">👥</div>
+        <div class="status-tag tag-soon"><div class="tag-pip"></div>Planned</div>
+        <div class="module-name">Team Ops</div>
+        <div class="module-desc">Staffing pipeline, capacity planning, and team performance management across pods.</div>
+      </div>
+      <div class="module-card card-purple inactive">
+        <div class="module-icon">🧮</div>
+        <div class="status-tag tag-soon"><div class="tag-pip"></div>Planned</div>
+        <div class="module-name">Pricing Calculator</div>
+        <div class="module-desc">Interactive new-client pricing tool with margin simulation and hiring impact modeling.</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-left">Insendra OS &nbsp;·&nbsp; <span id="footerDate"></span></div>
+  <div class="swatches">
+    <div class="sw" style="background:#6D4DF4"></div>
+    <div class="sw" style="background:#15D197"></div>
+    <div class="sw" style="background:#17D3DD"></div>
+    <div class="sw" style="background:#E44DF4"></div>
+  </div>
+</footer>
+
+<script>
+  function tick() {
+    document.getElementById('clock').textContent =
+      new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+  tick(); setInterval(tick, 1000);
+  document.getElementById('footerDate').textContent =
+    new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const h = new Date().getHours();
+  document.getElementById('greeting').textContent =
+    h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+</script>
+</body>
+</html>
