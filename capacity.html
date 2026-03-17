@@ -211,51 +211,103 @@ function WeeklyChart({ weekObjs, personMap, hireThresholdH }) {
 }
 
 // ── Client hours chart ────────────────────────────────────────────
-function ClientChart({ clientMap }) {
+function ClientChart({ clientByRole }) {
   const ref  = useRef(null);
   const inst = useRef(null);
 
   useEffect(() => {
     if (!ref.current) return;
     if (inst.current) { inst.current.destroy(); inst.current = null; }
-    const sorted = Object.entries(clientMap).sort((a, b) => b[1] - a[1]);
-    const total  = sorted.reduce((s,[,v])=>s+v,0);
+
+    // Sort by total hours (design + strategy), exclude pure-internal with no client name
+    const sorted = Object.entries(clientByRole)
+      .map(([name, d]) => ({ name, design: d.design||0, strategy: d.strategy||0, total: (d.design||0)+(d.strategy||0) }))
+      .filter(d => d.name !== "Unknown" && d.total > 0)
+      .sort((a, b) => b.total - a.total);
+
+    const labels = sorted.map(d => d.name === "Insendra" ? "Internal" : d.name);
 
     inst.current = new window.Chart(ref.current.getContext("2d"), {
       type: "bar",
       data: {
-        labels: sorted.map(([k]) => k === "Insendra" ? "Internal" : k),
-        datasets: [{
-          data: sorted.map(([,v]) => +v.toFixed(1)),
-          backgroundColor: sorted.map(([k]) =>
-            k === "Insendra" ? T.sub + "55" : T.purple + "CC"),
-          borderRadius: 4, barPercentage: 0.65,
-        }]
+        labels,
+        datasets: [
+          {
+            label: "Design",
+            data: sorted.map(d => +d.design.toFixed(1)),
+            backgroundColor: T.purple + "CC",
+            borderRadius: 0,
+            borderSkipped: false,
+          },
+          {
+            label: "Strategy",
+            data: sorted.map(d => +d.strategy.toFixed(1)),
+            backgroundColor: T.blue + "CC",
+            borderRadius: 4,
+            borderSkipped: "bottom",
+          },
+          {
+            label: "Copy (n/a)",
+            data: sorted.map(() => 0),
+            backgroundColor: T.green + "55",
+            borderRadius: 4,
+            borderSkipped: "bottom",
+          },
+        ]
       },
       options: {
-        indexAxis: "y", responsive: true, maintainAspectRatio: false,
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
         plugins: {
-          legend: { display: false },
+          legend: {
+            display: true,
+            position: "top",
+            align: "end",
+            labels: {
+              boxWidth: 10, boxHeight: 10, borderRadius: 2,
+              font: { size: 11, family: "'Plus Jakarta Sans',sans-serif" },
+              color: T.sub, padding: 16,
+              filter: item => item.text !== "Copy (n/a)" || true,
+            }
+          },
           tooltip: {
             backgroundColor: T.text, padding: 10,
             callbacks: {
-              label: c => ` ${c.raw.toFixed(1)}h  (${Math.round(c.raw/total*100)}% of total)`
+              label: c => c.dataset.label === "Copy (n/a)"
+                ? " Copy: not tracked yet"
+                : ` ${c.dataset.label}: ${c.raw.toFixed(1)}h`
             }
           }
         },
         scales: {
-          x: { grid: { color: "rgba(0,0,0,0.04)" }, border: { display: false },
-            ticks: { callback: v => v + "h", color: T.sub, font: { size: 11 } } },
-          y: { grid: { display: false }, border: { display: false },
-            ticks: { color: T.sub, font: { size: 12 } } }
+          x: {
+            stacked: true,
+            grid: { color: "rgba(0,0,0,0.04)" }, border: { display: false },
+            ticks: { callback: v => v + "h", color: T.sub, font: { size: 11 } }
+          },
+          y: {
+            stacked: true,
+            grid: { display: false }, border: { display: false },
+            ticks: { color: T.sub, font: { size: 12 } }
+          }
         }
       }
     });
     return () => { if (inst.current) { inst.current.destroy(); inst.current = null; } };
-  }, [clientMap]);
+  }, [clientByRole]);
 
-  const h = Math.max(180, Object.keys(clientMap).length * 42 + 50);
-  return <div style={{position:"relative",height:h}}><canvas ref={ref}/></div>;
+  const h = Math.max(200, Object.keys(clientByRole).length * 44 + 80);
+  return (
+    <div>
+      <div style={{position:"relative",height:h}}><canvas ref={ref}/></div>
+      <div style={{display:"flex",alignItems:"center",gap:6,padding:"10px 4px 0",
+        fontSize:11,color:T.sub}}>
+        <span style={{width:8,height:8,borderRadius:2,background:T.green+"55",display:"inline-block"}}/>
+        Copy tracking coming once task types are split in Harvest
+      </div>
+    </div>
+  );
 }
 
 // ── Utilization trend sparkline ───────────────────────────────────
@@ -645,15 +697,38 @@ function App() {
     }
 
     const clientMap = {};
+    const clientByRole = {}; // { clientName: { design: h, strategy: h } }
     const taskMap   = {};
-    const taskEntries = {}; // count of individual time entries per task type
+    const taskEntries = {};
+    const DESIGN_PEOPLE   = ["Enrique"];
+    const STRATEGY_PEOPLE = ["Jeremy", "Mariana", "Laryssa"];
+
+    for (const e of entries) {
+      const fn = (e.user?.name || "Unknown").split(" ")[0];
+      const c  = e.client?.name || "Unknown";
+      if (c === "Unknown") continue;
+
+      if (!clientByRole[c]) clientByRole[c] = { design: 0, strategy: 0 };
+
+      if (DESIGN_PEOPLE.includes(fn)) {
+        clientMap[c] = (clientMap[c] || 0) + e.hours;
+        clientByRole[c].design += e.hours;
+        const t = e.task?.name || "Unknown";
+        taskMap[t]     = (taskMap[t] || 0) + e.hours;
+        taskEntries[t] = (taskEntries[t] || 0) + 1;
+      } else if (STRATEGY_PEOPLE.includes(fn)) {
+        clientByRole[c].strategy += e.hours;
+        // Also include internal in clientMap for Enrique-only chart
+      }
+    }
+
+    // Rebuild clientMap to include internal (Enrique only, for backward compat)
     for (const e of entries) {
       if (!(e.user?.name || "").startsWith("Enrique")) continue;
       const c = e.client?.name || "Unknown";
-      clientMap[c] = (clientMap[c] || 0) + e.hours;
-      const t = e.task?.name || "Unknown";
-      taskMap[t]     = (taskMap[t] || 0) + e.hours;
-      taskEntries[t] = (taskEntries[t] || 0) + 1;
+      if (c === "Unknown") continue;
+      // already added above for Enrique, but handle Insendra internal
+      if (!clientMap[c]) clientMap[c] = 0; // already set
     }
 
     const enData   = personMap["Enrique"];
@@ -664,7 +739,7 @@ function App() {
     const edPct    = taskTot > 0 ? (taskMap["Email Design"]||0) / taskTot : 0;
 
     return {
-      weekObjs, personMap, clientMap, taskMap, taskEntries, taskTot,
+      weekObjs, personMap, clientMap, clientByRole, taskMap, taskEntries, taskTot,
       enTotal: Math.round(enTotal*10)/10,
       enAvg:   Math.round(enAvg*10)/10,
       enWeekly, edPct,
@@ -833,22 +908,30 @@ Be specific with numbers. No hiring recommendations unless utilization is genuin
             <>
               {/* ── Team overview stat strip ── */}
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(155px,1fr))",gap:10,marginBottom:14}}>
-                <StatCard big label="Total hours logged" value={fh(totalH)}
-                  sub={`whole team · ${C.weekObjs.length} weeks`} color={T.text}/>
+                {/* Per-person weekly avgs — the most scannable top-line view */}
+                {[["Enrique",T.purple],["Jeremy",T.blue],["Mariana",T.green]]
+                  .filter(([n]) => C.personMap[n])
+                  .map(([name, color]) => {
+                    const avg  = C.personMap[name].total / (C.weekObjs.length || 1);
+                    const rate = avg / BILLABLE_TARGET;
+                    return (
+                      <StatCard key={name} big
+                        label={`${name} avg / week`}
+                        value={fh(avg)}
+                        sub={`${fpct(rate)} of ${BILLABLE_TARGET}h target`}
+                        color={utilizationColor(rate)}
+                      />
+                    );
+                  })
+                }
                 <StatCard label="Billable hours" value={fh(billableH)}
                   sub={`${Math.round(billablePct*100)}% of all logged time`}
                   color={billablePct>=0.7?T.green:T.orange}/>
-                <StatCard label="Internal overhead" value={fh(internalH)}
-                  sub={`${Math.round((1-billablePct)*100)}% of total — Insendra ops`}
-                  color={T.sub}/>
                 <StatCard label="Revenue / billable hr" value={rph?`$${Math.round(rph)}`:"—"}
                   sub={`${$m(TOTAL_MRR)}/mo MRR basis`} color={T.purple}/>
                 <StatCard label="Capacity available" value={unusedH+"h"}
-                  sub={`Enrique vs 30h/wk target · ${C.weekObjs.length} wks`}
+                  sub={`Enrique vs 30h/wk · ${C.weekObjs.length} wks`}
                   color={unusedH>20?T.blue:T.green}/>
-                <StatCard label="Entries logged" value={String(raw.count)}
-                  sub={`${C.weekObjs.length} weeks · ${raw.from} → ${raw.to}`}
-                  color={T.sub}/>
               </div>
 
               {/* ── Hiring signal ── */}
@@ -984,11 +1067,10 @@ Be specific with numbers. No hiring recommendations unless utilization is genuin
                   })}
               </div>
 
-              {/* ── Client hours (full width) ── */}
               <Card style={{marginBottom:14}}>
-                <SectionHead title="Hours by client" sub="Enrique only · production load per account"/>
+                <SectionHead title="Hours by client" sub="Design + Strategy · Copy tracking coming soon"/>
                 <div style={{padding:"14px 22px 22px"}}>
-                  <ClientChart clientMap={C.clientMap}/>
+                  <ClientChart clientByRole={C.clientByRole}/>
                 </div>
               </Card>
 
