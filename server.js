@@ -403,6 +403,26 @@ app.post("/backfill", async (req, res) => {
   }
 });
 
+// ── POST /ai-proxy — forwards AI requests to Anthropic ───────────
+app.post("/ai-proxy", async (req, res) => {
+  if (!ANTHROPIC_KEY) return res.status(503).json({ error: "ANTHROPIC_KEY not configured" });
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(req.body),
+    });
+    const data = await r.json();
+    res.status(r.status).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /harvest-data ─────────────────────────────────────────────
 // Returns paginated Harvest time entries for the given number of weeks.
 // Requires HARVEST_TOKEN and HARVEST_ACCOUNT_ID env vars.
@@ -1324,6 +1344,10 @@ app.post("/run-dms-now", async (req, res) => {
 // ── GET /dashboard ────────────────────────────────────────────────
 app.get("/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "dashboard.html"));
+});
+
+app.get("/capacity", (req, res) => {
+  res.sendFile(path.join(__dirname, "capacity.html"));
 });
 
 app.get("/client-dashboard", (req, res) => {
