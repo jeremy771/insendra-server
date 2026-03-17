@@ -1341,13 +1341,41 @@ app.get("/financial", (req, res) => {
 });
 
 app.get("/api/insendra-data", (req, res) => {
-  const dataPath = path.join(__dirname, "data", "insendra-data.json");
-  try {
-    const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to load financial data" });
-  }
+  res.json({
+    "version": 2,
+    "lastUpdated": "2026-03-17",
+    "employees": [
+      { "id": "e1", "name": "Employee (AM)", "role": "am", "type": "pod", "podId": "pod-a", "monthlySalary": 2500, "weeklyCapacityHours": 30 },
+      { "id": "e2", "name": "Chaiyo", "role": "copy", "type": "pod", "podId": "pod-a", "monthlySalary": 350, "weeklyCapacityHours": 10 },
+      { "id": "e3", "name": "Enrique", "role": "design", "type": "pod", "podId": "pod-a", "monthlySalary": 2000, "weeklyCapacityHours": 30 },
+      { "id": "e4", "name": "Carly", "role": "copy", "type": "pod", "podId": "pod-a", "monthlySalary": 350, "weeklyCapacityHours": 10 },
+      { "id": "e5", "name": "Rebecca", "role": "copy", "type": "pod", "podId": "pod-a", "monthlySalary": 800, "weeklyCapacityHours": 10 },
+      { "id": "e6", "name": "Jeremy", "role": "executive", "type": "operational", "podId": null, "monthlySalary": 3500, "weeklyCapacityHours": 40 },
+      { "id": "e7", "name": "Garrett", "role": "executive", "type": "operational", "podId": null, "monthlySalary": 1000, "weeklyCapacityHours": 0 },
+      { "id": "e8", "name": "Kelvin", "role": "admin", "type": "operational", "podId": null, "monthlySalary": 600, "weeklyCapacityHours": 0 }
+    ],
+    "clients": [
+      { "id": "c1", "name": "CablesAndKits", "podId": "pod-a", "monthlyRevenue": 1900, "taskVolumes": { "emails": 8, "flows": 0, "meetings": 2 } },
+      { "id": "c2", "name": "Chandler 4 Corners", "podId": "pod-a", "monthlyRevenue": 1980, "taskVolumes": { "emails": 8, "flows": 0, "meetings": 2 } },
+      { "id": "c3", "name": "Bae & Friends", "podId": "pod-a", "monthlyRevenue": 2961, "taskVolumes": { "emails": 16, "flows": 0, "meetings": 3 } },
+      { "id": "c4", "name": "Eli Health", "podId": "pod-a", "monthlyRevenue": 5000, "taskVolumes": { "emails": 8, "flows": 1, "meetings": 2 } },
+      { "id": "c5", "name": "Safety Gear", "podId": "pod-a", "monthlyRevenue": 4824, "taskVolumes": { "emails": 16, "flows": 1, "meetings": 2 } },
+      { "id": "c6", "name": "F+W", "podId": "pod-a", "monthlyRevenue": 1941, "taskVolumes": { "emails": 4, "flows": 0, "meetings": 2 } }
+    ],
+    "pods": [{ "id": "pod-a", "name": "Pod A" }],
+    "fixedCosts": [{ "id": "f1", "name": "Business Overhead", "monthlyCost": 1500 }],
+    "settings": { "overheadMethod": "hours", "targetMargin": 0.45, "utilizationTarget": 0.9 },
+    "roleRates": {
+      "design": { "emails": 1, "flows": 0.67, "meetings": 0 },
+      "copy":   { "emails": 1, "flows": 0.67, "meetings": 0 },
+      "am":     { "emails": 1, "flows": 0,    "meetings": 1 }
+    },
+    "taskTypes": [
+      { "id": "emails",   "label": "Campaign Emails" },
+      { "id": "flows",    "label": "Flows" },
+      { "id": "meetings", "label": "Meetings" }
+    ]
+  });
 });
 
 app.listen(PORT, () => {
