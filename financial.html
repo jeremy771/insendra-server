@@ -6,455 +6,633 @@
   <title>Financial Overview · Insendra OS</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@700;800;900&family=Manrope:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    @font-face {
-      font-family: 'Deuterium Variable';
-      src: local('Deuterium Variable'), local('DeuteriumVariable');
-      font-display: swap;
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
       --purple:      #6D4DF4;
       --purple-soft: #917FDD;
       --purple-bg:   #F3F0FF;
       --green:       #15D197;
-      --green-light: #64F2C6;
       --green-bg:    #EDFDF7;
       --cyan:        #17D3DD;
-      --cyan-light:  #58EBF3;
       --cyan-bg:     #EDFBFC;
       --pink:        #E44DF4;
-      --pink-light:  #E991F2;
       --pink-bg:     #FDF0FF;
       --amber:       #F59E0B;
       --amber-bg:    #FFFBEB;
       --red:         #EF4444;
       --red-bg:      #FEF2F2;
-      --bg:          #FFFFFF;
+      --border:      #E8E8F0;
+      --text:        #16112A;
+      --text-mid:    #5A5272;
+      --text-dim:    #9E98B8;
       --surface:     #FAFAFA;
-      --border:      #EBEBF0;
-      --text:        #1A1025;
-      --text-mid:    #5C5475;
-      --text-dim:    #9C93B8;
+      --font:        'Plus Jakarta Sans', sans-serif;
+      --mono:        'JetBrains Mono', monospace;
     }
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { min-height: 100%; background: #fff; color: var(--text); font-family: 'Manrope', 'Jost', sans-serif; -webkit-font-smoothing: antialiased; }
-
-    body::before {
-      content: ''; position: fixed; top: -140px; right: -140px;
-      width: 500px; height: 500px;
-      background: radial-gradient(circle, rgba(109,77,244,0.06) 0%, transparent 70%);
-      pointer-events: none; z-index: 0;
-    }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    html, body { min-height:100%; background:#fff; color:var(--text); font-family:var(--font); -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.5; }
 
     /* NAV */
-    .nav {
-      position: sticky; top: 0; z-index: 100;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 56px; height: 64px;
-      background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-    }
-    .nav-left { display: flex; align-items: center; gap: 16px; }
-    .back-btn {
-      display: flex; align-items: center; gap: 6px;
-      font-family: 'JetBrains Mono', monospace; font-size: 11px;
-      color: var(--text-dim); text-decoration: none; letter-spacing: 0.5px;
-      transition: color 0.15s; padding: 4px 0;
-    }
-    .back-btn:hover { color: var(--purple); }
-    .nav-div { width: 1px; height: 18px; background: var(--border); }
-    .nav-crumb {
-      font-family: 'JetBrains Mono', monospace; font-size: 11px;
-      color: var(--text-mid); letter-spacing: 1.5px; text-transform: uppercase;
-    }
-    .nav-right { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
+    .nav { position:sticky; top:0; z-index:200; display:flex; align-items:center; justify-content:space-between; padding:0 48px; height:60px; background:rgba(255,255,255,.94); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); }
+    .nav-left { display:flex; align-items:center; gap:14px; }
+    .back { display:flex; align-items:center; gap:6px; text-decoration:none; color:var(--text-dim); font-size:12px; font-weight:600; transition:color .15s; }
+    .back:hover { color:var(--purple); }
+    .ndiv { width:1px; height:16px; background:var(--border); }
+    .ncrumb { font-size:12px; font-weight:700; color:var(--text-mid); }
+    .save-pill { font-family:var(--mono); font-size:10px; padding:3px 10px; border-radius:100px; letter-spacing:1px; opacity:0; transition:opacity .3s; }
+    .save-pill.show { opacity:1; }
+    .save-pill.saving { background:var(--purple-bg); color:var(--purple); }
+    .save-pill.saved  { background:var(--green-bg);  color:var(--green);  }
 
-    /* LOADING */
-    .main { position: relative; z-index: 1; max-width: 1020px; margin: 0 auto; padding: 56px 56px 96px; }
-    .state-center {
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center; min-height: 50vh; gap: 16px; text-align: center;
-    }
-    .spinner {
-      width: 36px; height: 36px;
-      border: 2px solid var(--border);
-      border-top-color: var(--purple);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .state-text { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); }
+    /* TABS */
+    .tabs { display:flex; border-bottom:1px solid var(--border); padding:0 48px; background:#fff; position:sticky; top:60px; z-index:100; }
+    .tab { padding:14px 20px; font-size:13px; font-weight:700; color:var(--text-dim); border:none; background:none; border-bottom:2px solid transparent; cursor:pointer; transition:color .15s,border-color .15s; margin-bottom:-1px; }
+    .tab:hover { color:var(--purple); }
+    .tab.active { color:var(--purple); border-bottom-color:var(--purple); }
 
-    /* PAGE HEADER */
-    @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    /* LAYOUT */
+    .main { max-width:1060px; margin:0 auto; padding:44px 48px 96px; }
+    .panel { display:none; }
+    .panel.active { display:block; animation:rise .3s ease both; }
+    @keyframes rise { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
 
-    .page-header {
-      display: flex; align-items: flex-end; justify-content: space-between;
-      margin-bottom: 48px; gap: 20px; flex-wrap: wrap;
-      animation: rise 0.4s ease both;
-    }
-    .page-eyebrow {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-family: 'JetBrains Mono', monospace; font-size: 10px;
-      letter-spacing: 3px; text-transform: uppercase; color: var(--purple); margin-bottom: 12px;
-    }
-    .eyebrow-bar { width: 24px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--purple), var(--cyan)); }
-    .page-title { font-family: 'Deuterium Variable', 'League Spartan', sans-serif; font-size: 38px; font-weight: 900; color: var(--text); }
-    .page-meta { font-size: 12px; color: var(--text-dim); text-align: right; line-height: 1.8; }
-
-    /* SECTION */
-    .section-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; margin-top: 48px; }
-    .section-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-dim); white-space: nowrap; }
-    .section-rule { flex: 1; height: 1px; background: var(--border); }
-
-    /* KPI GRID */
-    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-    @media (max-width: 680px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
-
-    .kpi-card {
-      background: #fff; border: 1.5px solid var(--border); border-radius: 16px;
-      padding: 24px; display: flex; flex-direction: column; gap: 8px;
-      animation: rise 0.4s ease both;
-    }
-    .kpi-card:nth-child(1) { animation-delay: 0.05s; border-top: 3px solid var(--purple); }
-    .kpi-card:nth-child(2) { animation-delay: 0.10s; border-top: 3px solid var(--pink); }
-    .kpi-card:nth-child(3) { animation-delay: 0.15s; }
-    .kpi-card:nth-child(4) { animation-delay: 0.20s; }
-
-    .kpi-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
-    .kpi-value { font-family: 'Deuterium Variable', 'League Spartan', sans-serif; font-size: 32px; font-weight: 900; line-height: 1; color: var(--text); }
-    .kpi-sub { font-size: 11px; color: var(--text-dim); font-weight: 300; }
-
-    .badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 1px;
-      font-weight: 500; padding: 3px 9px; border-radius: 100px; width: fit-content;
-    }
-    .badge-green  { background: var(--green-bg);  color: var(--green);  }
-    .badge-amber  { background: var(--amber-bg);  color: var(--amber);  }
-    .badge-red    { background: var(--red-bg);    color: var(--red);    }
-    .badge-purple { background: var(--purple-bg); color: var(--purple); }
-    .badge-pink   { background: var(--pink-bg);   color: var(--pink);   }
+    /* TYPOGRAPHY */
+    .page-title { font-size:28px; font-weight:800; color:var(--text); line-height:1.15; }
+    .page-sub   { font-size:13px; color:var(--text-dim); margin-top:4px; }
+    .sec-head   { display:flex; align-items:center; gap:12px; margin:44px 0 20px; }
+    .sec-label  { font-size:10px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; color:var(--text-dim); white-space:nowrap; }
+    .sec-rule   { flex:1; height:1px; background:var(--border); }
+    .card-title { font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim); margin-bottom:20px; }
 
     /* CARD */
-    .card { background: #fff; border: 1.5px solid var(--border); border-radius: 16px; padding: 28px; animation: rise 0.4s ease both; }
-    .card-title { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 24px; }
+    .card { background:#fff; border:1.5px solid var(--border); border-radius:14px; }
+    .cp   { padding:24px; }
+
+    /* BADGE */
+    .badge { display:inline-flex; align-items:center; font-size:10px; font-weight:700; padding:2px 8px; border-radius:100px; letter-spacing:.5px; }
+    .bg-green  { background:var(--green-bg);  color:var(--green);  }
+    .bg-amber  { background:var(--amber-bg);  color:var(--amber);  }
+    .bg-red    { background:var(--red-bg);    color:var(--red);    }
+    .bg-purple { background:var(--purple-bg); color:var(--purple); }
+    .bg-cyan   { background:var(--cyan-bg);   color:var(--cyan);   }
+
+    /* KPI */
+    .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+    .kpi-card { background:#fff; border:1.5px solid var(--border); border-radius:14px; padding:22px; }
+    .kpi-card:nth-child(1) { border-top:3px solid var(--purple); }
+    .kpi-card:nth-child(2) { border-top:3px solid var(--pink); }
+    .kpi-label { font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; }
+    .kpi-value { font-size:28px; font-weight:800; line-height:1; margin-bottom:8px; }
+    .kpi-sub   { font-size:11px; color:var(--text-dim); }
 
     /* TWO COL */
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    @media (max-width: 680px) { .two-col { grid-template-columns: 1fr; } }
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 
-    /* BURN BARS */
-    .burn-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
-    .burn-row:last-of-type { margin-bottom: 0; }
-    .burn-row-top { display: flex; justify-content: space-between; align-items: center; }
-    .burn-name { font-size: 13px; color: var(--text-mid); font-weight: 300; }
-    .burn-value { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); }
-    .burn-track { height: 5px; background: var(--surface); border-radius: 3px; overflow: hidden; border: 1px solid var(--border); }
-    .burn-fill { height: 100%; border-radius: 3px; transition: width 0.7s cubic-bezier(0.23,1,0.32,1); }
-    .burn-total-row {
-      display: flex; justify-content: space-between; align-items: center;
-      padding-top: 16px; border-top: 1px solid var(--border); margin-top: 18px;
-    }
-    .burn-total-label { font-size: 13px; font-weight: 500; color: var(--text); }
-    .burn-total-value { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 500; color: var(--pink); }
+    /* BURN */
+    .burn-row  { margin-bottom:16px; }
+    .burn-row:last-of-type { margin-bottom:0; }
+    .burn-top  { display:flex; justify-content:space-between; margin-bottom:6px; }
+    .burn-name { font-size:13px; color:var(--text-mid); }
+    .burn-val  { font-family:var(--mono); font-size:12px; color:var(--text); font-weight:500; }
+    .burn-track { height:5px; background:var(--surface); border-radius:3px; overflow:hidden; border:1px solid var(--border); }
+    .burn-fill  { height:100%; border-radius:3px; transition:width .7s cubic-bezier(.23,1,.32,1); }
+    .burn-total { display:flex; justify-content:space-between; align-items:center; padding-top:14px; border-top:1px solid var(--border); margin-top:16px; }
+    .burn-total-label { font-size:13px; font-weight:600; }
+    .burn-total-val   { font-family:var(--mono); font-size:15px; font-weight:600; color:var(--pink); }
 
-    /* TARGET ROWS */
-    .target-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
-    .target-row:last-child { border-bottom: none; }
-    .target-label { font-size: 13px; color: var(--text-mid); font-weight: 300; }
-    .target-val { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text); }
+    /* TARGET */
+    .t-row   { display:flex; justify-content:space-between; align-items:center; padding:11px 0; border-bottom:1px solid var(--border); }
+    .t-row:last-child { border-bottom:none; }
+    .t-label { font-size:13px; color:var(--text-mid); }
+    .t-val   { font-family:var(--mono); font-size:12px; font-weight:500; }
 
-    /* CLIENT TABLE */
-    .client-table { width: 100%; border-collapse: collapse; }
-    .client-table th {
-      font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 2px;
-      text-transform: uppercase; color: var(--text-dim);
-      text-align: left; padding: 0 0 14px; border-bottom: 1px solid var(--border);
-    }
-    .client-table th.num { text-align: right; }
-    .client-table td { padding: 16px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
-    .client-table tr:last-child td { border-bottom: none; }
-    .client-table tbody tr:hover td { background: var(--purple-bg); border-radius: 8px; }
-    .client-name { font-family: 'Deuterium Variable', 'League Spartan', sans-serif; font-size: 15px; font-weight: 800; color: var(--text); }
-    .client-tasks { font-size: 11px; color: var(--text-dim); margin-top: 2px; font-weight: 300; }
-    .mono { font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: right; color: var(--text-mid); }
-    .mono-bold { color: var(--text); font-weight: 500; }
-
-    .margin-wrap { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
-    .margin-track { width: 56px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
-    .margin-fill { height: 100%; border-radius: 2px; }
-    .margin-pct { font-family: 'JetBrains Mono', monospace; font-size: 12px; min-width: 46px; text-align: right; }
-
-    /* TOTALS ROW */
-    .totals-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--border); }
-    .totals-label { font-size: 14px; font-weight: 500; }
-    .totals-right { display: flex; gap: 32px; }
-    .totals-right .mono { font-size: 14px; font-weight: 500; }
+    /* DATA TABLE */
+    .dt { width:100%; border-collapse:collapse; }
+    .dt th { font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim); text-align:left; padding:0 0 12px; border-bottom:1px solid var(--border); }
+    .dt th.r { text-align:right; }
+    .dt td { padding:14px 0; border-bottom:1px solid var(--border); vertical-align:middle; }
+    .dt tr:last-child td { border-bottom:none; }
+    .dt tbody tr:hover td { background:rgba(109,77,244,.025); }
+    .cn  { font-size:13px; font-weight:700; }
+    .cs  { font-size:11px; color:var(--text-dim); margin-top:2px; }
+    .mono { font-family:var(--mono); font-size:12px; text-align:right; color:var(--text-mid); }
+    .mono.b { color:var(--text); font-weight:600; }
+    .mg-wrap  { display:flex; align-items:center; gap:8px; justify-content:flex-end; }
+    .mg-track { width:52px; height:4px; background:var(--border); border-radius:2px; overflow:hidden; }
+    .mg-fill  { height:100%; border-radius:2px; }
+    .mg-pct   { font-family:var(--mono); font-size:11px; min-width:44px; text-align:right; font-weight:500; }
+    .totals-bar { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-top:1px solid var(--border); }
 
     /* CAPACITY */
-    .cap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
-    .cap-card { background: #fff; border: 1.5px solid var(--border); border-radius: 14px; padding: 22px; animation: rise 0.4s ease both; }
-    .cap-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-    .cap-role { font-family: 'Deuterium Variable', 'League Spartan', sans-serif; font-size: 16px; font-weight: 800; }
-    .cap-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-    .cap-fill { height: 100%; border-radius: 3px; transition: width 0.7s cubic-bezier(0.23,1,0.32,1); }
-    .cap-footer { display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; color: var(--text-dim); font-weight: 300; }
-    .cap-pct { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .cap-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; }
+    .cap-card { background:#fff; border:1.5px solid var(--border); border-radius:12px; padding:18px; }
+    .cap-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+    .cap-role { font-size:13px; font-weight:700; }
+    .cap-track { height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
+    .cap-fill  { height:100%; border-radius:3px; transition:width .7s cubic-bezier(.23,1,.32,1); }
+    .cap-foot  { display:flex; justify-content:space-between; margin-top:8px; font-size:11px; color:var(--text-dim); }
+    .cap-pct   { font-family:var(--mono); font-size:11px; font-weight:500; }
+
+    /* PODS */
+    .pod-block { margin-bottom:52px; }
+    .pod-hdr   { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+    .pod-dot   { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+    .pod-name  { font-size:20px; font-weight:800; }
+    .stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+    .stat-card { background:#fff; border:1.5px solid var(--border); border-radius:12px; padding:18px; }
+    .stat-label { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-dim); margin-bottom:6px; }
+    .stat-value { font-size:22px; font-weight:800; }
+    .stat-sub   { font-size:11px; color:var(--text-dim); margin-top:3px; }
+
+    /* CALCULATOR */
+    .calc-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+    .field { display:flex; flex-direction:column; gap:6px; }
+    .field label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--text-mid); }
+    .field input, .field select { padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-family:var(--font); font-size:13px; color:var(--text); outline:none; background:#fff; transition:border-color .15s; }
+    .field input:focus, .field select:focus { border-color:var(--purple); }
+    .field.full { grid-column:1/-1; }
+    .hours-strip { display:flex; gap:10px; flex-wrap:wrap; }
+    .hchip { display:flex; flex-direction:column; align-items:center; gap:2px; background:var(--purple-bg); border-radius:10px; padding:12px 18px; min-width:88px; }
+    .hchip.tot { background:var(--cyan-bg); }
+    .hc-r { font-size:10px; font-weight:700; text-transform:uppercase; color:var(--purple-soft); letter-spacing:1px; }
+    .hchip.tot .hc-r { color:var(--cyan); }
+    .hc-v { font-size:22px; font-weight:800; color:var(--purple); }
+    .hchip.tot .hc-v { color:var(--cyan); }
+    .hc-u { font-size:10px; color:var(--purple-soft); }
+    .hchip.tot .hc-u { color:var(--cyan); }
+    .tier-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+    .tier-card { border:1.5px solid var(--border); border-radius:12px; padding:16px; cursor:pointer; transition:all .15s; text-align:center; }
+    .tier-card:hover { border-color:var(--purple-soft); transform:translateY(-2px); }
+    .tier-card.sel { border-color:var(--purple); box-shadow:0 0 0 3px rgba(109,77,244,.12); }
+    .tier-name  { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:var(--text-dim); margin-bottom:8px; }
+    .tier-price { font-size:22px; font-weight:800; margin:6px 0 4px; }
+    .tier-price span { font-size:11px; font-weight:400; color:var(--text-dim); }
+    .tier-sub   { font-family:var(--mono); font-size:11px; color:var(--text-dim); margin-top:5px; }
+    .cmul { width:62px; border:1.5px solid var(--border); border-radius:6px; padding:4px 8px; font-family:var(--mono); font-size:12px; text-align:center; outline:none; }
+    .cmul:focus { border-color:var(--purple); }
+    .export-bar { display:flex; align-items:center; justify-content:space-between; background:var(--purple-bg); border-radius:10px; padding:14px 18px; margin-top:16px; }
+    .exp-label { font-size:13px; font-weight:700; color:var(--purple); }
+    .exp-sub   { font-size:11px; color:var(--purple-soft); margin-top:2px; }
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:8px; font-family:var(--font); font-size:13px; font-weight:700; border:none; cursor:pointer; transition:all .15s; }
+    .btn-primary { background:var(--purple); color:#fff; }
+    .btn-primary:hover { background:#5c3de0; }
+    .btn-sm { padding:6px 14px; font-size:12px; }
+    .fit-card { background:var(--green-bg); border:1.5px solid rgba(21,209,151,.2); border-radius:12px; padding:16px 20px; font-size:13px; font-weight:700; color:var(--green); }
+    .hire-card { background:var(--amber-bg); border:1.5px solid rgba(245,158,11,.25); border-radius:12px; padding:20px; }
+    .hire-title { font-size:12px; font-weight:700; color:var(--amber); text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; }
+    .hire-row  { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(245,158,11,.15); }
+    .hire-row:last-child { border-bottom:none; }
+    .hire-name { font-size:13px; font-weight:600; }
+
+    /* SETTINGS */
+    .range-wrap  { display:flex; align-items:center; gap:14px; margin-top:8px; }
+    .range-input { flex:1; accent-color:var(--purple); }
+    .range-val   { font-family:var(--mono); font-size:14px; font-weight:700; color:var(--purple); min-width:40px; text-align:right; }
+    .method-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:10px; }
+    .method-card { border:1.5px solid var(--border); border-radius:10px; padding:14px; cursor:pointer; transition:all .15s; }
+    .method-card:hover { border-color:var(--purple-soft); }
+    .method-card.on { border-color:var(--purple); background:var(--purple-bg); }
+    .m-name { font-size:13px; font-weight:700; margin-bottom:3px; }
+    .m-desc { font-size:11px; color:var(--text-dim); }
+    .et { width:100%; border-collapse:collapse; }
+    .et th { font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim); text-align:left; padding:0 8px 10px 0; border-bottom:1px solid var(--border); }
+    .et td { padding:9px 8px 9px 0; border-bottom:1px solid var(--border); vertical-align:middle; }
+    .et tr:last-child td { border-bottom:none; }
+    .ei { width:100%; padding:6px 10px; border:1.5px solid var(--border); border-radius:7px; font-family:var(--font); font-size:13px; color:var(--text); outline:none; background:#fff; transition:border-color .15s; }
+    .ei:focus { border-color:var(--purple); }
+    .ei.num { font-family:var(--mono); text-align:right; width:90px; }
+    .ei.sm  { width:70px; }
+    .del { background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:18px; line-height:1; padding:2px 5px; border-radius:5px; transition:all .15s; }
+    .del:hover { color:var(--red); background:var(--red-bg); }
+    .add-btn { display:flex; align-items:center; gap:6px; padding:8px 0; font-size:12px; font-weight:700; color:var(--purple); background:none; border:none; cursor:pointer; margin-top:10px; }
+    .add-btn:hover { color:#5c3de0; }
+    .rb { display:inline-block; padding:2px 7px; border-radius:100px; font-size:10px; font-weight:700; background:var(--purple-bg); color:var(--purple); }
   </style>
 </head>
 <body>
 
 <nav class="nav">
   <div class="nav-left">
-    <a href="/dashboard" class="back-btn">← OS Home</a>
-    <div class="nav-div"></div>
-    <div class="nav-crumb">Financial Overview</div>
+    <a href="/dashboard" class="back">← OS Home</a>
+    <div class="ndiv"></div>
+    <div class="ncrumb">Financial Overview</div>
   </div>
-  <div class="nav-right" id="lastUpdated"></div>
+  <div id="savePill" class="save-pill">SAVED</div>
 </nav>
 
-<main class="main" id="app">
-  <div class="state-center" id="loading">
-    <div class="spinner"></div>
-    <div class="state-text">Loading financial data…</div>
+<div class="tabs">
+  <button class="tab active"  data-tab="overview">Overview</button>
+  <button class="tab"         data-tab="pods">Pods</button>
+  <button class="tab"         data-tab="calculator">New Client</button>
+  <button class="tab"         data-tab="settings">Settings &amp; Data</button>
+</div>
+
+<div class="main">
+
+  <!-- OVERVIEW -->
+  <div id="panel-overview" class="panel active">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:32px;flex-wrap:wrap;gap:12px">
+      <div><div class="page-title">Business P&amp;L</div><div class="page-sub" id="overviewMeta"></div></div>
+    </div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+    <div class="sec-head"><div class="sec-label">Cost Structure</div><div class="sec-rule"></div></div>
+    <div class="two-col" id="costSection"></div>
+    <div class="sec-head"><div class="sec-label">Client P&amp;L</div><div class="sec-rule"></div></div>
+    <div class="card cp" id="clientTable" style="overflow-x:auto"></div>
+    <div class="sec-head"><div class="sec-label">Team Capacity</div><div class="sec-rule"></div></div>
+    <div class="cap-grid" id="capGrid"></div>
   </div>
-</main>
 
-<script>
-const ROLE_LABELS = { design:'Designer', copy:'Copywriter', am:'Account Manager', executive:'Executive', admin:'Admin', strategy:'Strategist', coo:'COO', cro:'CRO', finance:'Finance', hr:'HR', dev:'Developer' };
-const rl  = r => ROLE_LABELS[r] || r;
-const fmt = v => '$' + Math.round(v).toLocaleString();
-const pct = v => (v * 100).toFixed(1) + '%';
+  <!-- PODS -->
+  <div id="panel-pods" class="panel">
+    <div class="page-title" style="margin-bottom:6px">Pod P&amp;L</div>
+    <div class="page-sub">Financial breakdown by delivery pod</div>
+    <div id="podsContent"></div>
+  </div>
 
-function compute(d) {
-  const { employees, clients, fixedCosts, settings, taskTypes, roleRates } = d;
-  const delivery    = employees.filter(e => e.type === 'pod');
-  const operational = employees.filter(e => e.type === 'operational');
-  const podSalary   = delivery.reduce((s, e) => s + e.monthlySalary, 0);
-  const opSalary    = operational.reduce((s, e) => s + e.monthlySalary, 0);
-  const fixedTotal  = fixedCosts.reduce((s, f) => s + f.monthlyCost, 0);
-  const totalBurn   = podSalary + opSalary + fixedTotal;
-
-  const enriched = clients.map(c => {
-    const byRole = {};
-    taskTypes.forEach(tt => {
-      Object.keys(roleRates).forEach(role => {
-        byRole[role] = (byRole[role] || 0) + (c.taskVolumes?.[tt.id] || 0) * (roleRates[role]?.[tt.id] || 0);
-      });
-    });
-    const totalHours = Object.values(byRole).reduce((s, v) => s + v, 0);
-    return { ...c, hoursByRole: byRole, totalHours, revenue: c.monthlyRevenue };
-  });
-
-  const totalRevenue = enriched.reduce((s, c) => s + c.revenue, 0);
-  const totalHrsAll  = enriched.reduce((s, c) => s + c.totalHours, 0);
-
-  const clientResults = enriched.map(c => {
-    let share = settings.overheadMethod === 'revenue'
-      ? (totalRevenue === 0 ? 0 : c.revenue / totalRevenue)
-      : settings.overheadMethod === 'hours'
-        ? (totalHrsAll === 0 ? 0 : c.totalHours / totalHrsAll)
-        : (enriched.length === 0 ? 0 : 1 / enriched.length);
-    const overhead = totalBurn * share;
-    const profit   = c.revenue - overhead;
-    return { ...c, overhead, profit, margin: c.revenue === 0 ? 0 : profit / c.revenue };
-  });
-
-  const cap = {}, demand = {};
-  delivery.forEach(e => { cap[e.role] = (cap[e.role] || 0) + (e.weeklyCapacityHours || 0) * 4; });
-  clientResults.forEach(c => Object.entries(c.hoursByRole).forEach(([r, h]) => { demand[r] = (demand[r] || 0) + h; }));
-
-  const totalProfit = totalRevenue - totalBurn;
-  return {
-    totals: { revenue: totalRevenue, burn: totalBurn, profit: totalProfit, margin: totalRevenue === 0 ? 0 : totalProfit / totalRevenue, podSalary, opSalary, fixedTotal },
-    clients: clientResults, cap, demand, settings
-  };
-}
-
-function mColor(m, t) {
-  if (m >= t)        return { fill: '#15D197', text: '#15D197', badge: 'badge-green' };
-  if (m >= t * 0.7)  return { fill: '#F59E0B', text: '#F59E0B', badge: 'badge-amber' };
-  return                    { fill: '#EF4444', text: '#EF4444', badge: 'badge-red'   };
-}
-function cColor(u) {
-  if (u > 1)   return '#EF4444';
-  if (u > 0.9) return '#F59E0B';
-  return               '#15D197';
-}
-
-function render(data) {
-  const m = compute(data);
-  const { totals, clients, cap, demand, settings } = m;
-  const tgt = settings.targetMargin;
-  const lu = document.getElementById('lastUpdated');
-  if (lu && data.lastUpdated) lu.textContent = 'Updated ' + data.lastUpdated;
-
-  const profitColor = totals.profit >= 0 ? '#15D197' : '#EF4444';
-  const mc = mColor(totals.margin, tgt);
-
-  const clientRows = clients.map(c => {
-    const mc2 = mColor(c.margin, tgt);
-    const bw  = Math.min(Math.max(c.margin, 0) * 100, 100);
-    const tasks = Object.entries(c.taskVolumes || {}).filter(([,v])=>v>0).map(([k,v])=>`${v} ${k}`).join(' · ');
-    const pc = c.profit >= 0 ? '#15D197' : '#EF4444';
-    return `<tr>
-      <td><div class="client-name">${c.name}</div><div class="client-tasks">${tasks}</div></td>
-      <td class="mono mono-bold">${fmt(c.revenue)}</td>
-      <td class="mono">${c.totalHours.toFixed(1)} hrs</td>
-      <td class="mono">${fmt(c.overhead)}</td>
-      <td class="mono" style="color:${pc};font-weight:500">${fmt(c.profit)}</td>
-      <td><div class="margin-wrap">
-        <div class="margin-track"><div class="margin-fill" style="width:${bw}%;background:${mc2.fill}"></div></div>
-        <div class="margin-pct" style="color:${mc2.text}">${pct(c.margin)}</div>
-      </div></td>
-    </tr>`;
-  }).join('');
-
-  const totalRev2    = clients.reduce((s,c)=>s+c.revenue,0);
-  const totalProfit2 = clients.reduce((s,c)=>s+c.profit,0);
-  const pc2 = totalProfit2 >= 0 ? '#15D197' : '#EF4444';
-
-  const bPct = v => totals.burn === 0 ? 0 : v/totals.burn*100;
-  const burnRows = [
-    { label:'Pod Delivery Salaries', value:totals.podSalary,  color:'#6D4DF4' },
-    { label:'Operational Salaries',  value:totals.opSalary,   color:'#E44DF4' },
-    { label:'Fixed Costs',           value:totals.fixedTotal, color:'#17D3DD' },
-  ].map(r=>`<div class="burn-row">
-    <div class="burn-row-top"><span class="burn-name">${r.label}</span><span class="burn-value">${fmt(r.value)}</span></div>
-    <div class="burn-track"><div class="burn-fill" style="width:${bPct(r.value)}%;background:${r.color}"></div></div>
-  </div>`).join('');
-
-  const podRoles = [...new Set([...Object.keys(cap),...Object.keys(demand)])];
-  const capCards = podRoles.map((role,i)=>{
-    const c2 = cap[role]||0, d2 = demand[role]||0;
-    const u = c2===0 ? (d2>0?1.01:0) : d2/c2;
-    const col = cColor(u);
-    const pw = Math.min(u*100,100).toFixed(0);
-    const status = u>1?'Over capacity':u>0.9?'Near capacity':'Healthy';
-    const bcls   = u>1?'badge-red':u>0.9?'badge-amber':'badge-green';
-    return `<div class="cap-card" style="animation-delay:${0.05+i*0.05}s">
-      <div class="cap-header"><div class="cap-role">${rl(role)}</div><span class="badge ${bcls}">${status}</span></div>
-      <div class="cap-track"><div class="cap-fill" style="width:${pw}%;background:${col}"></div></div>
-      <div class="cap-footer"><span>${d2.toFixed(0)} demand / ${c2.toFixed(0)} capacity hrs</span><span class="cap-pct" style="color:${col}">${pw}%</span></div>
-    </div>`;
-  }).join('');
-
-  const methodLabel = { revenue:'By Revenue', hours:'By Hours', equal:'Equal Split' }[settings.overheadMethod] || settings.overheadMethod;
-  const revenueNeeded = totals.burn / (1 - tgt);
-  const revenueGap = Math.max(0, revenueNeeded - totals.revenue);
-  const marginGap = totals.margin - tgt;
-
-  document.getElementById('app').innerHTML = `
-    <div class="page-header">
-      <div>
-        <div class="page-eyebrow"><div class="eyebrow-bar"></div>Financial Overview</div>
-        <h1 class="page-title">Business P&amp;L</h1>
+  <!-- CALCULATOR -->
+  <div id="panel-calculator" class="panel">
+    <div class="page-title" style="margin-bottom:6px">New Client Calculator</div>
+    <div class="page-sub">Capacity impact, hiring simulation &amp; pricing</div>
+    <div class="sec-head"><div class="sec-label">Client Scope</div><div class="sec-rule"></div></div>
+    <div class="card cp">
+      <div class="calc-grid">
+        <div class="field full"><label>Client Name</label><input id="cName" type="text" placeholder="e.g. New Brand Co." oninput="runCalc()"></div>
+        <div class="field"><label>Campaign Emails / Mo</label><input id="cEmails" type="number" value="8" min="0" oninput="runCalc()"></div>
+        <div class="field"><label>Flows / Mo</label><input id="cFlows" type="number" value="0" min="0" oninput="runCalc()"></div>
+        <div class="field"><label>Meetings / Mo</label><input id="cMeetings" type="number" value="2" min="0" oninput="runCalc()"></div>
       </div>
-      <div class="page-meta">
-        ${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}<br>
-        <span>Overhead: ${methodLabel}</span>
+      <div style="margin-top:18px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px">Hours Required</div>
+        <div class="hours-strip" id="hoursStrip"></div>
       </div>
     </div>
+    <div class="sec-head"><div class="sec-label">Capacity Impact</div><div class="sec-rule"></div></div>
+    <div id="capImpact"></div>
+    <div class="sec-head"><div class="sec-label">Pricing Tiers</div><div class="sec-rule"></div></div>
+    <div class="tier-grid" id="tierGrid"></div>
+    <div id="exportBar"></div>
+  </div>
 
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-label">Monthly Revenue</div>
-        <div class="kpi-value" style="color:var(--purple)">${fmt(totals.revenue)}</div>
-        <div class="kpi-sub">${clients.length} active clients</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Monthly Burn</div>
-        <div class="kpi-value" style="color:var(--pink)">${fmt(totals.burn)}</div>
-        <div class="kpi-sub">Salaries + overhead</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Net Profit</div>
-        <div class="kpi-value" style="color:${profitColor}">${fmt(totals.profit)}</div>
-        <span class="badge ${totals.profit>=0?'badge-green':'badge-red'}">${totals.profit>=0?'↑ Profitable':'↓ Loss'}</span>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Net Margin</div>
-        <div class="kpi-value" style="color:${mc.text}">${pct(totals.margin)}</div>
-        <span class="badge ${mc.badge}">${totals.margin>=tgt?'Above target':totals.margin>=tgt*0.7?'Near target':'Below target'}</span>
-      </div>
-    </div>
-
-    <div class="section-head" style="animation:rise 0.4s 0.1s ease both">
-      <div class="section-label">Cost Structure</div><div class="section-rule"></div>
-    </div>
-    <div class="two-col" style="animation:rise 0.4s 0.12s ease both">
-      <div class="card">
-        <div class="card-title">Monthly Burn Breakdown</div>
-        ${burnRows}
-        <div class="burn-total-row">
-          <span class="burn-total-label">Total Monthly Burn</span>
-          <span class="burn-total-value">${fmt(totals.burn)}</span>
+  <!-- SETTINGS -->
+  <div id="panel-settings" class="panel">
+    <div class="page-title" style="margin-bottom:6px">Settings &amp; Data</div>
+    <div class="page-sub">Edit financial targets, team, clients and costs — changes save automatically</div>
+    <div class="sec-head"><div class="sec-label">Financial Targets</div><div class="sec-rule"></div></div>
+    <div class="card cp">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px">
+        <div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px">Target Margin</div>
+          <div class="range-wrap"><input type="range" class="range-input" id="marginSlider" min="10" max="80" step="1" oninput="onMarginChange(this.value)"><div class="range-val" id="marginVal">45%</div></div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Used for profitability badges across all views</div>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px">Capacity Utilization Target</div>
+          <div class="range-wrap"><input type="range" class="range-input" id="utilSlider" min="50" max="100" step="5" oninput="onUtilChange(this.value)"><div class="range-val" id="utilVal">90%</div></div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Triggers hiring simulation in the calculator</div>
         </div>
       </div>
-      <div class="card">
-        <div class="card-title">Financial Targets</div>
-        <div class="target-row"><span class="target-label">Target margin</span><span class="target-val" style="color:var(--purple)">${pct(tgt)}</span></div>
-        <div class="target-row"><span class="target-label">Actual margin</span><span class="target-val" style="color:${mc.text}">${pct(totals.margin)}</span></div>
-        <div class="target-row"><span class="target-label">Margin gap</span><span class="target-val" style="color:${marginGap>=0?'#15D197':'#EF4444'}">${marginGap>=0?'+':''}${pct(marginGap)}</span></div>
-        <div class="target-row"><span class="target-label">Revenue needed @ target</span><span class="target-val">${fmt(revenueNeeded)}</span></div>
-        <div class="target-row"><span class="target-label">Revenue gap to close</span><span class="target-val" style="color:${revenueGap===0?'#15D197':'#F59E0B'}">${revenueGap===0?'✓ On track':fmt(revenueGap)}</span></div>
-        <div class="target-row"><span class="target-label">Overhead method</span><span class="target-val" style="color:var(--cyan)">${methodLabel}</span></div>
+      <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px">Overhead Allocation Method</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Controls how burn is split across clients in the P&amp;L</div>
+        <div class="method-grid" id="methodGrid"></div>
       </div>
     </div>
+    <div class="sec-head"><div class="sec-label">Employees</div><div class="sec-rule"></div></div>
+    <div class="card cp"><table class="et" id="empTable"></table><button class="add-btn" onclick="addEmp()">+ Add Employee</button></div>
+    <div class="sec-head"><div class="sec-label">Clients</div><div class="sec-rule"></div></div>
+    <div class="card cp"><table class="et" id="clientEditTable"></table><button class="add-btn" onclick="addCli()">+ Add Client</button></div>
+    <div class="sec-head"><div class="sec-label">Fixed Costs</div><div class="sec-rule"></div></div>
+    <div class="card cp"><table class="et" id="fixedTable"></table><button class="add-btn" onclick="addFix()">+ Add Cost</button></div>
+  </div>
 
-    <div class="section-head" style="animation:rise 0.4s 0.18s ease both">
-      <div class="section-label">Client P&amp;L</div><div class="section-rule"></div>
-    </div>
-    <div class="card" style="animation:rise 0.4s 0.2s ease both;overflow-x:auto">
-      <table class="client-table">
-        <thead>
-          <tr>
-            <th>Client</th>
-            <th class="num">Revenue</th>
-            <th class="num">Hours</th>
-            <th class="num">Allocated Cost</th>
-            <th class="num">Profit</th>
-            <th class="num">Margin</th>
-          </tr>
-        </thead>
-        <tbody>${clientRows}</tbody>
-        <tfoot>
-          <tr><td colspan="6">
-            <div class="totals-row">
-              <span class="totals-label">Totals</span>
-              <div class="totals-right">
-                <span class="mono" style="color:var(--purple)">${fmt(totalRev2)}</span>
-                <span class="mono" style="color:${pc2}">${fmt(totalProfit2)}</span>
-                <span class="mono" style="color:${pc2}">${pct(totalRev2===0?0:totalProfit2/totalRev2)}</span>
-              </div>
-            </div>
-          </td></tr>
-        </tfoot>
-      </table>
-    </div>
+</div><!-- /main -->
 
-    <div class="section-head" style="animation:rise 0.4s 0.26s ease both">
-      <div class="section-label">Team Capacity</div><div class="section-rule"></div>
-    </div>
-    <div class="cap-grid" style="animation:rise 0.4s 0.28s ease both">${capCards}</div>
-  `;
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const STORE = 'insendra-fin-v1';
+const ROLES = ['design','copy','am','executive','admin','coo','cro','finance','hr','dev','strategy'];
+const RL    = {design:'Designer',copy:'Copywriter',am:'Account Manager',executive:'Executive',admin:'Admin',coo:'COO',cro:'CRO',finance:'Finance',hr:'HR',dev:'Developer',strategy:'Strategist'};
+const PCOLS = ['#6D4DF4','#15D197','#17D3DD','#E44DF4','#F59E0B','#EF4444'];
+const rl    = r => RL[r]||r;
+const fmt   = v => '$'+Math.round(v).toLocaleString();
+const pct   = v => (v*100).toFixed(1)+'%';
+
+let D = null;
+let selTier = null;
+
+// ── Engine ─────────────────────────────────────────────────────────────────
+function compute(d) {
+  const { employees:EE, clients:CC, fixedCosts:FF, settings:S, taskTypes:TT, roleRates:RR } = d;
+  const del  = EE.filter(e=>e.type==='pod');
+  const ops  = EE.filter(e=>e.type==='operational');
+  const podS = del.reduce((s,e)=>s+(+e.monthlySalary),0);
+  const opsS = ops.reduce((s,e)=>s+(+e.monthlySalary),0);
+  const fixS = FF.reduce((s,f)=>s+(+f.monthlyCost),0);
+  const burn = podS+opsS+fixS;
+  const shrd = opsS+fixS;
+
+  const enr = CC.map(c=>{
+    const hr={};
+    TT.forEach(tt=>{ Object.keys(RR).forEach(role=>{ hr[role]=(hr[role]||0)+(c.taskVolumes?.[tt.id]||0)*(RR[role]?.[tt.id]||0); }); });
+    const th=Object.values(hr).reduce((s,v)=>s+v,0);
+    return {...c,hoursByRole:hr,totalHours:th,revenue:+c.monthlyRevenue};
+  });
+  const totRev = enr.reduce((s,c)=>s+c.revenue,0);
+  const totHrs = enr.reduce((s,c)=>s+c.totalHours,0);
+
+  const cRes = enr.map(c=>{
+    const sh = S.overheadMethod==='revenue' ? (totRev?c.revenue/totRev:0)
+             : S.overheadMethod==='hours'   ? (totHrs?c.totalHours/totHrs:0)
+             : (enr.length?1/enr.length:0);
+    const ov=burn*sh, pr=c.revenue-ov;
+    return {...c,overhead:ov,profit:pr,margin:c.revenue?pr/c.revenue:0};
+  });
+
+  const pods = d.pods||[];
+  const pRes = pods.map(pod=>{
+    const pe = del.filter(e=>e.podId===pod.id);
+    const pc = cRes.filter(c=>c.podId===pod.id);
+    const rv = pc.reduce((s,c)=>s+c.revenue,0);
+    const dl = pe.reduce((s,e)=>s+(+e.monthlySalary),0);
+    const allPodAggs = pods.map(p=>{ const q=enr.filter(c=>c.podId===p.id); return {revenue:q.reduce((s,c)=>s+c.revenue,0),totalHours:q.reduce((s,c)=>s+c.totalHours,0)}; });
+    const tAR=allPodAggs.reduce((s,p)=>s+p.revenue,0), tAH=allPodAggs.reduce((s,p)=>s+p.totalHours,0);
+    const idx=pods.indexOf(pod); const pa=allPodAggs[idx]||{revenue:0,totalHours:0};
+    const sp = S.overheadMethod==='revenue'?(tAR?pa.revenue/tAR:0):S.overheadMethod==='hours'?(tAH?pa.totalHours/tAH:0):(pods.length?1/pods.length:0);
+    const ao=shrd*sp, tc=dl+ao, mg=rv?(rv-tc)/rv:0;
+    const pC={},pD={};
+    pe.forEach(e=>{pC[e.role]=(pC[e.role]||0)+(+e.weeklyCapacityHours)*4;});
+    pc.forEach(c=>Object.entries(c.hoursByRole).forEach(([r,h])=>{pD[r]=(pD[r]||0)+h;}));
+    return {pod,employees:pe,clients:pc,revenue:rv,directLabor:dl,allocatedOps:ao,totalCost:tc,margin:mg,podCap:pC,podDemand:pD};
+  });
+
+  const cap={},dem={};
+  del.forEach(e=>{cap[e.role]=(cap[e.role]||0)+(+e.weeklyCapacityHours)*4;});
+  cRes.forEach(c=>Object.entries(c.hoursByRole).forEach(([r,h])=>{dem[r]=(dem[r]||0)+h;}));
+
+  return {totals:{revenue:totRev,burn,profit:totRev-burn,margin:totRev?(totRev-burn)/totRev:0,podSalary:podS,opSalary:opsS,fixedTotal:fixS},clients:cRes,podResults:pRes,cap,demand:dem,settings:S};
 }
 
+function mc(m,t) {
+  if(m>=t)      return {fill:'#15D197',text:'#15D197',cls:'bg-green'};
+  if(m>=t*.7)   return {fill:'#F59E0B',text:'#F59E0B',cls:'bg-amber'};
+  return               {fill:'#EF4444',text:'#EF4444',cls:'bg-red'};
+}
+function cc(u) { return u>1?'#EF4444':u>0.9?'#F59E0B':'#15D197'; }
+
+// ── Overview ───────────────────────────────────────────────────────────────
+function renderOverview() {
+  const m=compute(D); const {totals,clients,cap,demand,settings:S}=m; const tgt=S.targetMargin;
+  const mc0=mc(totals.margin,tgt); const pc=totals.profit>=0?'#15D197':'#EF4444';
+  const date=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('overviewMeta').textContent=date+' · Overhead: '+({revenue:'By Revenue',hours:'By Hours',equal:'Equal Split'}[S.overheadMethod]||'');
+
+  document.getElementById('kpiGrid').innerHTML=`
+    <div class="kpi-card"><div class="kpi-label">Monthly Revenue</div><div class="kpi-value" style="color:var(--purple)">${fmt(totals.revenue)}</div><div class="kpi-sub">${clients.length} active clients</div></div>
+    <div class="kpi-card"><div class="kpi-label">Monthly Burn</div><div class="kpi-value" style="color:var(--pink)">${fmt(totals.burn)}</div><div class="kpi-sub">Salaries + overhead</div></div>
+    <div class="kpi-card"><div class="kpi-label">Net Profit</div><div class="kpi-value" style="color:${pc}">${fmt(totals.profit)}</div><span class="badge ${totals.profit>=0?'bg-green':'bg-red'}">${totals.profit>=0?'↑ Profitable':'↓ Loss'}</span></div>
+    <div class="kpi-card"><div class="kpi-label">Net Margin</div><div class="kpi-value" style="color:${mc0.text}">${pct(totals.margin)}</div><span class="badge ${mc0.cls}">${totals.margin>=tgt?'Above target':totals.margin>=tgt*.7?'Near target':'Below target'}</span></div>`;
+
+  const bP=v=>totals.burn?v/totals.burn*100:0;
+  const needed=totals.burn/(1-tgt), gap=Math.max(0,needed-totals.revenue), mgap=totals.margin-tgt;
+  const ml={revenue:'By Revenue',hours:'By Hours',equal:'Equal Split'}[S.overheadMethod]||'';
+  document.getElementById('costSection').innerHTML=`
+    <div class="card cp">
+      <div class="card-title">Monthly Burn Breakdown</div>
+      ${[['Pod Delivery Salaries',totals.podSalary,'var(--purple)'],['Operational Salaries',totals.opSalary,'var(--pink)'],['Fixed Costs',totals.fixedTotal,'var(--cyan)']].map(([n,v,c])=>`
+      <div class="burn-row"><div class="burn-top"><span class="burn-name">${n}</span><span class="burn-val">${fmt(v)}</span></div><div class="burn-track"><div class="burn-fill" style="width:${bP(v)}%;background:${c}"></div></div></div>`).join('')}
+      <div class="burn-total"><span class="burn-total-label">Total Monthly Burn</span><span class="burn-total-val">${fmt(totals.burn)}</span></div>
+    </div>
+    <div class="card cp">
+      <div class="card-title">Financial Targets</div>
+      <div class="t-row"><span class="t-label">Target margin</span><span class="t-val" style="color:var(--purple)">${pct(tgt)}</span></div>
+      <div class="t-row"><span class="t-label">Actual margin</span><span class="t-val" style="color:${mc0.text}">${pct(totals.margin)}</span></div>
+      <div class="t-row"><span class="t-label">Margin gap</span><span class="t-val" style="color:${mgap>=0?'#15D197':'#EF4444'}">${mgap>=0?'+':''}${pct(mgap)}</span></div>
+      <div class="t-row"><span class="t-label">Revenue needed @ target</span><span class="t-val">${fmt(needed)}</span></div>
+      <div class="t-row"><span class="t-label">Revenue gap to close</span><span class="t-val" style="color:${gap?'#F59E0B':'#15D197'}">${gap?fmt(gap):'✓ On track'}</span></div>
+      <div class="t-row"><span class="t-label">Overhead method</span><span class="t-val" style="color:var(--cyan)">${ml}</span></div>
+    </div>`;
+
+  const rows=clients.map(c=>{const mc2=mc(c.margin,tgt),bw=Math.min(Math.max(c.margin,0)*100,100);const tasks=Object.entries(c.taskVolumes||{}).filter(([,v])=>v>0).map(([k,v])=>`${v} ${k}`).join(' · ');const cp=c.profit>=0?'#15D197':'#EF4444';
+    return `<tr><td><div class="cn">${c.name}</div><div class="cs">${tasks}</div></td><td class="mono b">${fmt(c.revenue)}</td><td class="mono">${c.totalHours.toFixed(1)} hrs</td><td class="mono">${fmt(c.overhead)}</td><td class="mono" style="color:${cp};font-weight:700">${fmt(c.profit)}</td><td><div class="mg-wrap"><div class="mg-track"><div class="mg-fill" style="width:${bw}%;background:${mc2.fill}"></div></div><div class="mg-pct" style="color:${mc2.text}">${pct(c.margin)}</div></div></td></tr>`;}).join('');
+  const tr=clients.reduce((s,c)=>s+c.revenue,0),tp=clients.reduce((s,c)=>s+c.profit,0);
+  document.getElementById('clientTable').innerHTML=`<table class="dt"><thead><tr><th>Client</th><th class="r">Revenue</th><th class="r">Hours</th><th class="r">Alloc. Cost</th><th class="r">Profit</th><th class="r">Margin</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="6"><div class="totals-bar"><span style="font-size:13px;font-weight:700">Totals</span><div style="display:flex;gap:24px"><span class="mono b">${fmt(tr)}</span><span class="mono" style="color:${tp>=0?'#15D197':'#EF4444'};font-weight:700">${fmt(tp)}</span><span class="mono" style="color:${tp>=0?'#15D197':'#EF4444'};font-weight:700">${pct(tr?tp/tr:0)}</span></div></div></td></tr></tfoot></table>`;
+
+  const allR=[...new Set([...Object.keys(cap),...Object.keys(demand)])];
+  document.getElementById('capGrid').innerHTML=allR.map(role=>{const c2=cap[role]||0,d2=demand[role]||0,u=c2?(d2/c2):(d2?1.01:0),col=cc(u),pw=Math.min(u*100,100).toFixed(0);
+    return `<div class="cap-card"><div class="cap-head"><div class="cap-role">${rl(role)}</div><span class="badge ${u>1?'bg-red':u>0.9?'bg-amber':'bg-green'}">${u>1?'Over cap':u>0.9?'Near cap':'Healthy'}</span></div><div class="cap-track"><div class="cap-fill" style="width:${pw}%;background:${col}"></div></div><div class="cap-foot"><span>${d2.toFixed(0)} / ${c2.toFixed(0)} hrs</span><span class="cap-pct" style="color:${col}">${pw}%</span></div></div>`;}).join('');
+}
+
+// ── Pods ───────────────────────────────────────────────────────────────────
+function renderPods() {
+  const m=compute(D); const {podResults,settings:S}=m; const tgt=S.targetMargin;
+  if(!podResults.length){document.getElementById('podsContent').innerHTML='<div style="padding:48px;text-align:center;color:var(--text-dim);font-size:13px">No pods configured.</div>';return;}
+  document.getElementById('podsContent').innerHTML=podResults.map((p,i)=>{
+    const mc0=mc(p.margin,tgt);
+    const podRoles=[...new Set([...Object.keys(p.podCap),...Object.keys(p.podDemand)])];
+    const capHtml=podRoles.map(role=>{const c2=p.podCap[role]||0,d2=p.podDemand[role]||0,u=c2?d2/c2:(d2?1.01:0),col=cc(u),pw=Math.min(u*100,100).toFixed(0);
+      return `<div class="cap-card" style="padding:14px"><div class="cap-head"><div class="cap-role" style="font-size:12px">${rl(role)}</div><span class="badge ${u>1?'bg-red':u>0.9?'bg-amber':'bg-green'}" style="font-size:9px">${pw}%</span></div><div class="cap-track"><div class="cap-fill" style="width:${pw}%;background:${col}"></div></div><div class="cap-foot" style="font-size:10px"><span>${d2.toFixed(0)} / ${c2.toFixed(0)} hrs</span></div></div>`;}).join('');
+    const empRows=p.employees.map(e=>`<tr><td class="cn">${e.name}</td><td><span class="rb">${rl(e.role)}</span></td><td class="mono b" style="text-align:right">${fmt(+e.monthlySalary)}</td><td class="mono" style="text-align:right">${(+e.weeklyCapacityHours)*4} hrs/mo</td></tr>`).join('');
+    const cliRows=p.clients.map(c=>{const mc2=mc(c.margin,tgt);return `<tr><td class="cn">${c.name}</td><td class="mono b">${fmt(c.revenue)}</td><td class="mono">${c.totalHours.toFixed(1)}</td><td class="mono">${fmt(c.overhead)}</td><td class="mono" style="color:${c.profit>=0?'#15D197':'#EF4444'};font-weight:700">${fmt(c.profit)}</td><td><div class="mg-wrap"><div class="mg-track"><div class="mg-fill" style="width:${Math.min(Math.max(c.margin,0)*100,100)}%;background:${mc2.fill}"></div></div><div class="mg-pct" style="color:${mc2.text}">${pct(c.margin)}</div></div></td></tr>`;}).join('');
+    return `<div class="pod-block" style="margin-top:36px">
+      <div class="pod-hdr"><div class="pod-dot" style="background:${PCOLS[i%PCOLS.length]}"></div><div class="pod-name">${p.pod.name}</div><span class="badge ${mc0.cls}">${pct(p.margin)} margin</span></div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Revenue</div><div class="stat-value" style="color:var(--green)">${fmt(p.revenue)}</div></div>
+        <div class="stat-card"><div class="stat-label">Direct Labor</div><div class="stat-value" style="color:var(--purple)">${fmt(p.directLabor)}</div></div>
+        <div class="stat-card"><div class="stat-label">Allocated Overhead</div><div class="stat-value">${fmt(p.allocatedOps)}</div><div class="stat-sub">${fmt(p.totalCost)} total burn</div></div>
+        <div class="stat-card"><div class="stat-label">Net Margin</div><div class="stat-value" style="color:${mc0.text}">${pct(p.margin)}</div></div>
+      </div>
+      <div class="two-col" style="margin-bottom:16px">
+        <div class="card cp"><div class="card-title">Team</div><table class="dt"><thead><tr><th>Name</th><th>Role</th><th class="r">Salary</th><th class="r">Capacity</th></tr></thead><tbody>${empRows||'<tr><td colspan="4" style="color:var(--text-dim);padding:10px 0;font-size:12px">No staff assigned</td></tr>'}</tbody></table></div>
+        <div class="card cp"><div class="card-title">Utilization</div><div class="cap-grid" style="grid-template-columns:1fr 1fr">${capHtml||'<div style="color:var(--text-dim);font-size:12px">No data</div>'}</div></div>
+      </div>
+      <div class="card cp"><div class="card-title">Clients (${p.clients.length})</div>${p.clients.length?`<table class="dt"><thead><tr><th>Client</th><th class="r">Revenue</th><th class="r">Hours</th><th class="r">Alloc. Cost</th><th class="r">Profit</th><th class="r">Margin</th></tr></thead><tbody>${cliRows}</tbody></table>`:'<div style="color:var(--text-dim);font-size:12px">No clients assigned</div>'}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Calculator ─────────────────────────────────────────────────────────────
+function runCalc() {
+  const m=compute(D); const {settings:S,cap,demand}=m; const tgt=S.targetMargin;
+  const emails=parseInt(document.getElementById('cEmails').value)||0;
+  const flows =parseInt(document.getElementById('cFlows').value)||0;
+  const meets =parseInt(document.getElementById('cMeetings').value)||0;
+  const RR=D.roleRates||{};
+  const byRole={};
+  ['design','copy','am'].forEach(r=>{byRole[r]=(RR[r]?.emails||0)*emails+(RR[r]?.flows||0)*flows+(RR[r]?.meetings||0)*meets;});
+  const total=Object.values(byRole).reduce((s,v)=>s+v,0);
+
+  document.getElementById('hoursStrip').innerHTML=Object.entries(byRole).filter(([,v])=>v>0).map(([r,h])=>
+    `<div class="hchip"><div class="hc-r">${rl(r)}</div><div class="hc-v">${h.toFixed(1)}</div><div class="hc-u">hrs/mo</div></div>`
+  ).join('')+`<div class="hchip tot"><div class="hc-r">Total</div><div class="hc-v">${total.toFixed(1)}</div><div class="hc-u">hrs/mo</div></div>`;
+
+  const ut=S.utilizationTarget||0.9;
+  const allR=[...new Set([...Object.keys(cap),...Object.keys(demand),...Object.keys(byRole)])];
+  const after=allR.map(role=>{const c2=cap[role]||0,d2=(demand[role]||0)+(byRole[role]||0),u=c2?(d2/c2):(d2?1.01:0);return {role,capacity:c2,demand:d2,before:demand[role]||0,u};});
+  const needs=after.filter(c=>c.u>ut&&c.capacity>0);
+  const hireCost=needs.reduce((sum,c)=>{const s=D.employees.filter(e=>e.type==='pod'&&e.role===c.role);return sum+(s.length?s.reduce((x,e)=>x+(+e.monthlySalary),0)/s.length:2000);},0);
+
+  const capCards=after.map(c=>{const col=cc(c.u),pw=Math.min(c.u*100,100).toFixed(0),prev=((c.before/(c.capacity||1))*100).toFixed(0);
+    return `<div class="cap-card"><div class="cap-head"><div class="cap-role">${rl(c.role)}</div><span class="badge ${c.u>ut?'bg-red':c.u>0.85?'bg-amber':'bg-green'}">${c.u>ut?'Needs hire':'OK'}</span></div>
+      <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">Before: ${prev}%</div><div class="cap-track"><div class="cap-fill" style="width:${prev}%;background:var(--border)"></div></div>
+      <div style="font-size:10px;color:var(--text-dim);margin:6px 0 4px">After: ${pw}%</div><div class="cap-track"><div class="cap-fill" style="width:${pw}%;background:${col}"></div></div>
+      <div class="cap-foot"><span>${c.demand.toFixed(0)} / ${c.capacity} hrs</span><span class="cap-pct" style="color:${col}">${pw}%</span></div></div>`;}).join('');
+
+  const hiringHtml=needs.length===0
+    ? `<div class="fit-card">✓ This client fits within current team capacity — no new hires needed.</div>`
+    : `<div class="hire-card"><div class="hire-title">⚠ Hiring required to serve this client</div>${needs.map(c=>{const s=D.employees.filter(e=>e.type==='pod'&&e.role===c.role);const avg=s.length?s.reduce((x,e)=>x+(+e.monthlySalary),0)/s.length:2000;const hrs=s.length?s.reduce((x,e)=>x+(+e.weeklyCapacityHours),0)/s.length:30;return `<div class="hire-row"><span class="hire-name">Hire 1 ${rl(c.role)}</span><div style="display:flex;gap:14px"><span style="font-size:11px;color:var(--text-dim)">+${Math.round(hrs*4)} hrs/mo</span><span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--red)">+${fmt(avg)}/mo</span></div></div>`;}).join('')}<div style="display:flex;gap:24px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(245,158,11,.2)"><div><div style="font-size:10px;color:var(--text-dim)">Hire cost delta</div><div style="font-weight:800;color:var(--red)">${fmt(hireCost)}/mo</div></div><div><div style="font-size:10px;color:var(--text-dim)">New total burn</div><div style="font-weight:800">${fmt(m.totals.burn+hireCost)}/mo</div></div></div></div>`;
+
+  document.getElementById('capImpact').innerHTML=`<div class="cap-grid" style="margin-bottom:14px">${capCards}</div>${hiringHtml}`;
+
+  const flatRef=emails*115+flows*140+meets*150;
+  const effBurn=needs.length>0?m.totals.burn+hireCost:m.totals.burn;
+  const cmEl=document.querySelector('.cmul'); const cm=cmEl?parseFloat(cmEl.value)||1.5:1.5;
+  const TIERS=[{n:'Floor',m:1.35},{n:'Mid',m:1.5},{n:'Standard',m:1.75},{n:'Premium',m:2.0},{n:'Custom',m:cm,ed:true}].map((t,i)=>{
+    const price=flatRef*t.m,newRev=m.totals.revenue+price,margin=newRev?(newRev-effBurn)/newRev:0;
+    const mvp=Math.max(0,effBurn/(1-tgt)-m.totals.revenue);
+    return {...t,i,price,margin,hits:margin>=tgt,mvp,aboveMvp:price>=mvp};
+  });
+
+  document.getElementById('tierGrid').innerHTML=TIERS.map(t=>`
+    <div class="tier-card ${t.hits?'':'nohit'} ${selTier===t.i?'sel':''}" onclick="selT(${t.i})" style="border-top:3px solid ${t.hits?'var(--green)':'var(--red)'}">
+      <div class="tier-name">${t.n}</div>
+      ${t.ed?`<input class="cmul" type="number" step="0.05" value="${t.m}" onclick="event.stopPropagation()" oninput="runCalc()"><div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">× markup</div>`:
+               `<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">${t.m}× markup</div>`}
+      <div class="tier-price" style="color:${t.aboveMvp?'var(--text)':'var(--red)'}">${fmt(t.price)}<span>/mo</span></div>
+      <span class="badge ${t.hits?'bg-green':'bg-red'}" style="display:block;text-align:center;margin:6px auto 4px">${t.hits?'✓ Hits target':'Below target'}</span>
+      <div class="tier-sub">Margin: ${pct(t.margin)}</div>
+      <div class="tier-sub">ARR: ${fmt(t.price*12)}</div>
+    </div>`).join('');
+
+  if(selTier!==null&&TIERS[selTier]){const t=TIERS[selTier];const nm=document.getElementById('cName').value||'New Client';
+    document.getElementById('exportBar').innerHTML=`<div class="export-bar"><div><div class="exp-label">Export Proposal — ${t.n} tier · ${fmt(t.price)}/mo</div><div class="exp-sub">For ${nm}</div></div><button class="btn btn-primary btn-sm" onclick="doExport(${selTier})">Export PDF</button></div>`;
+  } else { document.getElementById('exportBar').innerHTML=`<div style="font-size:12px;color:var(--text-dim);margin-top:12px;text-align:center">Select a tier to export a proposal</div>`; }
+}
+
+function selT(i){selTier=i;runCalc();}
+
+function doExport(ti){
+  const m=compute(D),S=m.settings,tgt=S.targetMargin;
+  const emails=parseInt(document.getElementById('cEmails').value)||0;
+  const flows=parseInt(document.getElementById('cFlows').value)||0;
+  const meets=parseInt(document.getElementById('cMeetings').value)||0;
+  const flatRef=emails*115+flows*140+meets*150;
+  const RR=D.roleRates||{};const byRole={};['design','copy','am'].forEach(r=>{byRole[r]=(RR[r]?.emails||0)*emails+(RR[r]?.flows||0)*flows+(RR[r]?.meetings||0)*meets;});
+  const needs=Object.keys(m.cap).filter(role=>{const d2=(m.demand[role]||0)+(byRole[role]||0),c2=m.cap[role]||0;return c2>0&&d2/c2>(S.utilizationTarget||0.9);});
+  const hireCost=needs.reduce((sum,role)=>{const s=D.employees.filter(e=>e.type==='pod'&&e.role===role);return sum+(s.length?s.reduce((x,e)=>x+(+e.monthlySalary),0)/s.length:2000);},0);
+  const effBurn=needs.length>0?m.totals.burn+hireCost:m.totals.burn;
+  const cm=parseFloat(document.querySelector('.cmul')?.value)||1.5;
+  const TIERS=[{n:'Floor',m:1.35},{n:'Mid',m:1.5},{n:'Standard',m:1.75},{n:'Premium',m:2.0},{n:'Custom',m:cm}];
+  const t=TIERS[ti];if(!t)return;
+  const price=flatRef*t.m,newRev=m.totals.revenue+price,margin=newRev?(newRev-effBurn)/newRev:0;
+  const name=document.getElementById('cName').value||'New Client';
+  const date=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const rows=[emails&&`<li>${emails} Campaign Emails`,flows&&`<li>${flows} Flows`,meets&&`<li>${meets} Meetings`].filter(Boolean).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Insendra Proposal</title><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"><style>body{font-family:'Plus Jakarta Sans',sans-serif;padding:60px;color:#16112A;max-width:680px;margin:0 auto}h1{color:#6D4DF4;font-size:28px;font-weight:800}p{color:#9E98B8}.price{font-size:52px;font-weight:800;color:#6D4DF4;margin:20px 0 6px}.tier{display:inline-block;background:#F3F0FF;color:#6D4DF4;padding:4px 14px;border-radius:99px;font-size:12px;font-weight:700}h3{margin-top:28px;font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#9E98B8}ul{margin:8px 0;padding-left:20px}li{margin:6px 0}.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:10px}.stat{background:#FAFAFA;border:1.5px solid #E8E8F0;border-radius:10px;padding:14px}.sl{font-size:10px;color:#9E98B8;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px}.sv{font-size:20px;font-weight:800}</style></head><body>
+    <h1>Insendra</h1><p>Proposal for ${name} · ${date}</p><span class="tier">${t.n} · ${t.m}× markup</span>
+    <div class="price">$${Math.round(price).toLocaleString()}<span style="font-size:18px;font-weight:400;color:#9E98B8">/mo</span></div>
+    <div class="grid"><div class="stat"><div class="sl">Monthly</div><div class="sv">$${Math.round(price).toLocaleString()}</div></div><div class="stat"><div class="sl">Annual</div><div class="sv">$${Math.round(price*12).toLocaleString()}</div></div><div class="stat"><div class="sl">Proj. Margin</div><div class="sv">${(margin*100).toFixed(1)}%</div></div></div>
+    <h3>Scope</h3><ul>${rows||'<li>No tasks specified'}</ul>
+    <script>window.onload=function(){window.print()}<\/script></body></html>`;
+  const blob=new Blob([html],{type:'text/html'}),url=URL.createObjectURL(blob),w=window.open(url,'_blank');
+  if(w){w.addEventListener('load',()=>{setTimeout(()=>{w.print();URL.revokeObjectURL(url);},500);})}else{URL.revokeObjectURL(url);alert('Allow popups to export PDF');}
+}
+
+// ── Settings ───────────────────────────────────────────────────────────────
+function renderSettings(){
+  const S=D.settings;
+  document.getElementById('marginSlider').value=Math.round((S.targetMargin||.45)*100);
+  document.getElementById('marginVal').textContent=Math.round((S.targetMargin||.45)*100)+'%';
+  document.getElementById('utilSlider').value=Math.round((S.utilizationTarget||.9)*100);
+  document.getElementById('utilVal').textContent=Math.round((S.utilizationTarget||.9)*100)+'%';
+
+  document.getElementById('methodGrid').innerHTML=[{v:'revenue',l:'By Revenue',d:'Higher-paying clients absorb more'},{v:'hours',l:'By Hours',d:'Time-heavy clients absorb more'},{v:'equal',l:'Equal Split',d:'Divided evenly across clients'}].map(meth=>
+    `<div class="method-card ${S.overheadMethod===meth.v?'on':''}" onclick="setM('${meth.v}')"><div class="m-name">${meth.l}</div><div class="m-desc">${meth.d}</div></div>`).join('');
+
+  document.getElementById('empTable').innerHTML=`<thead><tr><th>Name</th><th>Role</th><th>Type</th><th>Salary/mo</th><th>Hrs/wk</th><th></th></tr></thead><tbody>${D.employees.map((e,i)=>`<tr>
+    <td><input class="ei" value="${e.name}" oninput="uE(${i},'name',this.value)"></td>
+    <td><select class="ei" style="width:128px" onchange="uE(${i},'role',this.value)">${ROLES.map(r=>`<option ${e.role===r?'selected':''}>${r}</option>`).join('')}</select></td>
+    <td><select class="ei" style="width:110px" onchange="uE(${i},'type',this.value)"><option ${e.type==='pod'?'selected':''}>pod</option><option ${e.type==='operational'?'selected':''}>operational</option></select></td>
+    <td><input class="ei num" type="number" value="${e.monthlySalary}" oninput="uE(${i},'monthlySalary',+this.value)"></td>
+    <td><input class="ei num sm" type="number" value="${e.weeklyCapacityHours}" oninput="uE(${i},'weeklyCapacityHours',+this.value)"></td>
+    <td><button class="del" onclick="dE(${i})" title="Remove">×</button></td>
+  </tr>`).join('')}</tbody>`;
+
+  document.getElementById('clientEditTable').innerHTML=`<thead><tr><th>Name</th><th>Revenue/mo</th><th>Emails</th><th>Flows</th><th>Meetings</th><th></th></tr></thead><tbody>${D.clients.map((c,i)=>`<tr>
+    <td><input class="ei" value="${c.name}" oninput="uC(${i},'name',this.value)"></td>
+    <td><input class="ei num" type="number" value="${c.monthlyRevenue}" oninput="uC(${i},'rev',+this.value)"></td>
+    <td><input class="ei num sm" type="number" value="${c.taskVolumes?.emails||0}" oninput="uT(${i},'emails',+this.value)"></td>
+    <td><input class="ei num sm" type="number" value="${c.taskVolumes?.flows||0}"  oninput="uT(${i},'flows',+this.value)"></td>
+    <td><input class="ei num sm" type="number" value="${c.taskVolumes?.meetings||0}" oninput="uT(${i},'meetings',+this.value)"></td>
+    <td><button class="del" onclick="dC(${i})" title="Remove">×</button></td>
+  </tr>`).join('')}</tbody>`;
+
+  document.getElementById('fixedTable').innerHTML=`<thead><tr><th>Description</th><th>Monthly Cost</th><th></th></tr></thead><tbody>${D.fixedCosts.map((f,i)=>`<tr>
+    <td><input class="ei" value="${f.name}" oninput="uF(${i},'name',this.value)"></td>
+    <td><input class="ei num" type="number" value="${f.monthlyCost}" oninput="uF(${i},'monthlyCost',+this.value)"></td>
+    <td><button class="del" onclick="dF(${i})" title="Remove">×</button></td>
+  </tr>`).join('')}</tbody>`;
+}
+
+function onMarginChange(v){document.getElementById('marginVal').textContent=v+'%';D.settings.targetMargin=v/100;save();rr();}
+function onUtilChange(v) {document.getElementById('utilVal').textContent=v+'%';D.settings.utilizationTarget=v/100;save();rr();}
+function setM(v){D.settings.overheadMethod=v;save();rr();}
+function uE(i,k,v){D.employees[i][k]=v;save();rr();}
+function uC(i,k,v){if(k==='rev')D.clients[i].monthlyRevenue=v;else D.clients[i][k]=v;save();rr();}
+function uT(i,k,v){if(!D.clients[i].taskVolumes)D.clients[i].taskVolumes={};D.clients[i].taskVolumes[k]=v;save();rr();}
+function uF(i,k,v){D.fixedCosts[i][k]=v;save();rr();}
+function dE(i){D.employees.splice(i,1);save();rr();}
+function dC(i){D.clients.splice(i,1);save();rr();}
+function dF(i){D.fixedCosts.splice(i,1);save();rr();}
+function addEmp(){D.employees.push({id:'e'+Date.now(),name:'New Employee',role:'copy',type:'pod',podId:D.pods[0]?.id||null,monthlySalary:0,weeklyCapacityHours:0});save();rr();}
+function addCli(){D.clients.push({id:'c'+Date.now(),name:'New Client',podId:D.pods[0]?.id||null,monthlyRevenue:0,taskVolumes:{emails:0,flows:0,meetings:0}});save();rr();}
+function addFix(){D.fixedCosts.push({id:'f'+Date.now(),name:'New Cost',monthlyCost:0});save();rr();}
+
+// ── Save / Persist ─────────────────────────────────────────────────────────
+function save(){
+  try{localStorage.setItem(STORE,JSON.stringify(D));}catch(e){}
+  const p=document.getElementById('savePill');
+  p.textContent='SAVING';p.className='save-pill saving show';
+  clearTimeout(window._st);
+  window._st=setTimeout(()=>{p.textContent='SAVED';p.className='save-pill saved show';setTimeout(()=>p.classList.remove('show'),1500);},400);
+}
+
+// ── Tab routing ────────────────────────────────────────────────────────────
+function rr(){
+  const at=document.querySelector('.tab.active')?.dataset?.tab;
+  if(at==='overview')   renderOverview();
+  if(at==='pods')       renderPods();
+  if(at==='calculator') runCalc();
+  if(at==='settings')   renderSettings();
+}
+
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    const tab=btn.dataset.tab;
+    document.getElementById('panel-'+tab).classList.add('active');
+    btn.classList.add('active');
+    if(tab==='pods')       renderPods();
+    if(tab==='calculator') runCalc();
+    if(tab==='settings')   renderSettings();
+  });
+});
+
+// ── Boot ───────────────────────────────────────────────────────────────────
 fetch('/api/insendra-data')
-  .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-  .then(render)
-  .catch(err => {
-    document.getElementById('app').innerHTML = `
-      <div class="state-center">
-        <div style="font-size:40px">⚠️</div>
-        <div class="state-text" style="color:var(--red)">Could not load financial data</div>
-        <div class="state-text">${err.message}</div>
-        <div class="state-text" style="color:var(--text-dim);margin-top:8px">Make sure /api/insendra-data is returning your insendra-data.json</div>
-      </div>`;
+  .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+  .then(srv=>{
+    const loc=(()=>{try{const s=localStorage.getItem(STORE);return s?JSON.parse(s):null;}catch{return null;}})();
+    D=loc||srv;
+    if(!D.settings)D.settings={overheadMethod:'hours',targetMargin:.45,utilizationTarget:.9};
+    if(!D.taskTypes)D.taskTypes=[{id:'emails',label:'Campaign Emails'},{id:'flows',label:'Flows'},{id:'meetings',label:'Meetings'}];
+    if(!D.roleRates)D.roleRates={design:{emails:1,flows:.67,meetings:0},copy:{emails:1,flows:.67,meetings:0},am:{emails:1,flows:0,meetings:1}};
+    renderOverview();
+  })
+  .catch(err=>{
+    document.querySelector('.main').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:12px;text-align:center"><div style="font-size:36px">⚠️</div><div style="font-size:14px;font-weight:700;color:var(--red)">Could not load financial data</div><div style="font-size:12px;color:var(--text-dim)">${err.message}</div><div style="font-size:12px;color:var(--text-dim);margin-top:4px">Make sure /api/insendra-data is working in server.js</div></div>`;
   });
 </script>
 </body>
