@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Insendra — Team Capacity</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%236D4DF4'/><text x='16' y='22' text-anchor='middle' font-family='sans-serif' font-size='18' font-weight='700' fill='white'>i</text></svg>"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#F5F4FA;color:#1A1025;-webkit-font-smoothing:antialiased;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:#DDDDE8;border-radius:2px;}
+table{border-spacing:0;}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef, useMemo } = React;
+const PROXY = window.location.origin;
+
+// ── Design tokens ─────────────────────────────────────────────────
+const T = {
+  purple:"#6D4DF4", purpleL:"#EEE9FF", purpleMid:"#917FDD",
+  green:"#15D197",  greenL:"#EDFDF7",
+  red:"#F04E55",    redL:"#FEEAEB",
+  orange:"#F59E0B", orangeL:"#FEF3C7",
+  blue:"#3B82F6",   blueL:"#DBEAFE",
+  cyan:"#17D3DD",   cyanL:"#EDFBFC",
+  text:"#1A1025", mid:"#5C5475", sub:"#9C93B8",
+  white:"#FFFFFF", bg:"#F5F4FA", border:"#EBEBF0",
+  mono:"'JetBrains Mono',monospace",
+  sans:"'Plus Jakarta Sans',sans-serif",
+};
+
+// ── Constants ─────────────────────────────────────────────────────
+const BILLABLE_TARGET   = 30;   // 6h/day × 5 days
+const TOTAL_TARGET      = 40;   // full work week
+const HIRE_THRESHOLD    = 0.85; // 85% of billable target = hiring watch
+const HIRE_CONSECUTIVE  = 3;    // weeks above threshold = hire signal
+
+// Client MRR for revenue-per-hour calc (from /api/insendra-data)
+const CLIENT_MRR = {
+  "CablesAndKits": 1900, "Chandler 4 Corners": 1980,
+  "Bae & Friends": 2961, "Eli Health": 5000,
+  "Safety Gear": 4824,   "Fore & Wharf": 1941,
+};
+const TOTAL_MRR = Object.values(CLIENT_MRR).reduce((s,v)=>s+v,0);
+
+// ── Helpers ───────────────────────────────────────────────────────
+const fh  = h => h == null ? "—" : h.toFixed(1) + "h";
+const fpct = n => n == null ? "—" : Math.round(n * 100) + "%";
+const $m  = n => n >= 1000 ? `$${(n/1000).toFixed(1)}K` : `$${Math.round(n)}`;
+const fmtWk = ds => new Date(ds + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+function weekKey(ds) {
+  const d = new Date(ds + "T12:00:00");
+  const off = d.getDay() === 0 ? -6 : 1 - d.getDay();
+  return new Date(d.getTime() + off * 86400000).toISOString().slice(0, 10);
+}
+
+function utilizationColor(rate) {
+  if (rate == null) return T.sub;
+  if (rate >= 1.0)  return T.red;
+  if (rate >= 0.85) return T.orange;
+  if (rate >= 0.6)  return T.green;
+  return T.blue;
+}
+
+// ── Shared components ─────────────────────────────────────────────
+const Spin = ({s=20,c=T.purple}) => (
+  <span style={{display:"inline-block",width:s,height:s,
+    border:`2px solid ${c}22`,borderTopColor:c,
+    borderRadius:"50%",animation:"spin .6s linear infinite"}}/>
+);
+
+const Card = ({children,style={}}) => (
+  <div style={{background:T.white,border:`1px solid ${T.border}`,
+    borderRadius:16,...style}}>{children}</div>
+);
+
+const SectionHead = ({title,sub,right,accent}) => (
+  <div style={{padding:"16px 22px",borderBottom:`1px solid ${T.border}`,
+    display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+    <div>
+      <div style={{fontSize:13,fontWeight:700,color:T.text,
+        display:"flex",alignItems:"center",gap:7}}>
+        {accent && <span style={{color:accent}}>{accent === T.purple ? "✦" : ""}</span>}
+        {title}
+      </div>
+      {sub && <div style={{fontSize:11,color:T.sub,marginTop:2}}>{sub}</div>}
+    </div>
+    {right}
+  </div>
+);
+
+// ── Stat card ─────────────────────────────────────────────────────
+function StatCard({ label, value, sub, color, big, tag, tagColor }) {
+  return (
+    <Card style={{padding:"18px 20px"}}>
+      <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",
+        textTransform:"uppercase",color:T.sub,marginBottom:10}}>{label}</div>
+      <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:5}}>
+        <div style={{fontSize:big?28:22,fontWeight:800,color:color||T.text,
+          lineHeight:1,fontFamily:T.mono}}>{value}</div>
+        {tag && (
+          <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",
+            borderRadius:20,background:(tagColor||T.purple)+"18",
+            color:tagColor||T.purple}}>{tag}</span>
+        )}
+      </div>
+      {sub && <div style={{fontSize:10,color:T.sub,lineHeight:1.5}}>{sub}</div>}
+    </Card>
+  );
+}
+
+// ── Utilization bar ───────────────────────────────────────────────
+function UtilBar({ rate, h, target }) {
+  const c = utilizationColor(rate);
+  const pct = Math.min(rate || 0, 1.15);
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",
+        alignItems:"baseline",marginBottom:5}}>
+        <span style={{fontSize:12,fontWeight:600,color:c,fontFamily:T.mono}}>
+          {fpct(rate)}
+        </span>
+        <span style={{fontSize:11,color:T.sub}}>{fh(h)} / {target}h target</span>
+      </div>
+      <div style={{height:6,background:T.border,borderRadius:99,overflow:"hidden"}}>
+        <div style={{height:"100%",width:`${pct*100}%`,
+          background:c,borderRadius:99,
+          transition:"width 0.4s ease"}}/>
+      </div>
+    </div>
+  );
+}
+
+// ── Weekly chart ──────────────────────────────────────────────────
+function WeeklyChart({ weekObjs, personMap, hireThresholdH }) {
+  const ref  = useRef(null);
+  const inst = useRef(null);
+  const COLORS = { Enrique: T.purple, Jeremy: T.blue, Mariana: T.green };
+
+  useEffect(() => {
+    if (!ref.current || !weekObjs.length) return;
+    if (inst.current) { inst.current.destroy(); inst.current = null; }
+
+    const people = Object.keys(personMap).filter(p => COLORS[p]);
+    const datasets = people.map(name => ({
+      label: name,
+      data: weekObjs.map(w => +((personMap[name]?.byWeek[w.key] || 0).toFixed(1))),
+      backgroundColor: (COLORS[name]) + "CC",
+      borderRadius: 5,
+      borderSkipped: false,
+      barPercentage: 0.68,
+    }));
+
+    // Billable target line
+    datasets.push({
+      label: "Billable target (30h)",
+      data: weekObjs.map(() => BILLABLE_TARGET),
+      type: "line", borderColor: T.green + "60",
+      borderDash: [5, 4], borderWidth: 1.5,
+      pointRadius: 0, fill: false, order: 0,
+    });
+    // Hire watch line
+    datasets.push({
+      label: "Hire watch (85%)",
+      data: weekObjs.map(() => Math.round(BILLABLE_TARGET * HIRE_THRESHOLD)),
+      type: "line", borderColor: T.orange + "70",
+      borderDash: [3, 3], borderWidth: 1.5,
+      pointRadius: 0, fill: false, order: 0,
+    });
+
+    inst.current = new window.Chart(ref.current.getContext("2d"), {
+      type: "bar",
+      data: { labels: weekObjs.map(w => w.label), datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: T.text, padding: 10,
+            callbacks: { label: c => ` ${c.dataset.label}: ${c.raw}h` }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, border: { display: false },
+            ticks: { color: T.sub, font: { size: 11, family: T.sans } } },
+          y: { max: 45, beginAtZero: true,
+            grid: { color: "rgba(0,0,0,0.04)" }, border: { display: false },
+            ticks: { callback: v => v + "h", color: T.sub,
+              font: { size: 11, family: T.mono } } }
+        }
+      }
+    });
+    return () => { if (inst.current) { inst.current.destroy(); inst.current = null; } };
+  }, [weekObjs, personMap]);
+
+  return <div style={{position:"relative",height:240}}><canvas ref={ref}/></div>;
+}
+
+// ── Client hours chart ────────────────────────────────────────────
+function ClientChart({ clientMap }) {
+  const ref  = useRef(null);
+  const inst = useRef(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    if (inst.current) { inst.current.destroy(); inst.current = null; }
+    const sorted = Object.entries(clientMap).sort((a, b) => b[1] - a[1]);
+    const total  = sorted.reduce((s,[,v])=>s+v,0);
+
+    inst.current = new window.Chart(ref.current.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: sorted.map(([k]) => k === "Insendra" ? "Internal" : k),
+        datasets: [{
+          data: sorted.map(([,v]) => +v.toFixed(1)),
+          backgroundColor: sorted.map(([k]) =>
+            k === "Insendra" ? T.sub + "55" : T.purple + "CC"),
+          borderRadius: 4, barPercentage: 0.65,
+        }]
+      },
+      options: {
+        indexAxis: "y", responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: T.text, padding: 10,
+            callbacks: {
+              label: c => ` ${c.raw.toFixed(1)}h  (${Math.round(c.raw/total*100)}% of total)`
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: "rgba(0,0,0,0.04)" }, border: { display: false },
+            ticks: { callback: v => v + "h", color: T.sub, font: { size: 11 } } },
+          y: { grid: { display: false }, border: { display: false },
+            ticks: { color: T.sub, font: { size: 12 } } }
+        }
+      }
+    });
+    return () => { if (inst.current) { inst.current.destroy(); inst.current = null; } };
+  }, [clientMap]);
+
+  const h = Math.max(180, Object.keys(clientMap).length * 42 + 50);
+  return <div style={{position:"relative",height:h}}><canvas ref={ref}/></div>;
+}
+
+// ── Utilization trend sparkline ───────────────────────────────────
+function TrendSparkline({ weekObjs, weeklyHours }) {
+  const ref  = useRef(null);
+  const inst = useRef(null);
+  const rates = weekObjs.map(w => +((weeklyHours[w.key] || 0) / BILLABLE_TARGET).toFixed(2));
+
+  useEffect(() => {
+    if (!ref.current || !rates.length) return;
+    if (inst.current) { inst.current.destroy(); inst.current = null; }
+    const ctx  = ref.current.getContext("2d");
+    const grad = ctx.createLinearGradient(0, 0, 0, 60);
+    grad.addColorStop(0, T.purple + "20");
+    grad.addColorStop(1, T.purple + "00");
+
+    inst.current = new window.Chart(ctx, {
+      type: "line",
+      data: {
+        labels: weekObjs.map(w => w.label),
+        datasets: [{
+          data: rates.map(r => +(r * 100).toFixed(0)),
+          borderColor: T.purple, backgroundColor: grad,
+          fill: true, tension: 0.4,
+          pointRadius: 0, borderWidth: 2,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false, min: 0, max: 130 } }
+      }
+    });
+    return () => { if (inst.current) { inst.current.destroy(); inst.current = null; } };
+  }, [rates.join(",")]);
+
+  return <div style={{position:"relative",height:60}}><canvas ref={ref}/></div>;
+}
+
+// ── Hiring signal card ────────────────────────────────────────────
+function HiringSignal({ weekObjs, weeklyHours }) {
+  const rates = weekObjs.map(w => (weeklyHours[w.key] || 0) / BILLABLE_TARGET);
+  const overThreshold = rates.filter(r => r >= HIRE_THRESHOLD).length;
+  const lastN = rates.slice(-HIRE_CONSECUTIVE);
+  const consecutiveOver = lastN.every(r => r >= HIRE_THRESHOLD);
+  const avgRate = rates.length ? rates.reduce((s,r)=>s+r,0)/rates.length : 0;
+  const trend = rates.length >= 2 ? rates[rates.length-1] - rates[0] : 0;
+
+  let signal, signalColor, signalBg, signalIcon, signalMsg;
+  if (consecutiveOver || overThreshold >= Math.max(3, rates.length * 0.6)) {
+    signal = "HIRE NOW"; signalColor = T.red; signalBg = T.redL;
+    signalIcon = "🚨";
+    signalMsg = `Enrique has been at or above ${Math.round(HIRE_THRESHOLD*100)}% utilization for ${overThreshold} of ${rates.length} weeks. At current trajectory, production will become a bottleneck. Time to post a job.`;
+  } else if (overThreshold >= 2 || avgRate >= 0.70) {
+    signal = "WATCH"; signalColor = T.orange; signalBg = T.orangeL;
+    signalIcon = "⚠️";
+    signalMsg = `Enrique hit ${Math.round(HIRE_THRESHOLD*100)}%+ utilization ${overThreshold} time${overThreshold!==1?"s":""} in this window. Not critical yet — but start thinking about whether a junior hire or contractor makes sense in the next quarter.`;
+  } else {
+    signal = "HEALTHY"; signalColor = T.green; signalBg = T.greenL;
+    signalIcon = "✅";
+    signalMsg = `Current production capacity is healthy. Enrique is averaging ${fpct(avgRate)} of billable target. ${trend > 0.05 ? "Utilization is trending up — keep watching." : "No immediate staffing action needed."}`;
+  }
+
+  const trendLabel = trend > 0.08 ? "↑ Rising" : trend < -0.08 ? "↓ Falling" : "→ Steady";
+  const trendColor = trend > 0.08 ? T.red : trend < -0.08 ? T.green : T.sub;
+
+  return (
+    <Card style={{marginBottom:14,border:`1.5px solid ${signalColor}33`,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"stretch"}}>
+        {/* Signal badge */}
+        <div style={{width:160,flexShrink:0,background:signalBg,
+          display:"flex",flexDirection:"column",alignItems:"center",
+          justifyContent:"center",padding:"20px 16px",gap:8,
+          borderRight:`1px solid ${T.border}`}}>
+          <div style={{fontSize:28}}>{signalIcon}</div>
+          <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.1em",
+            textTransform:"uppercase",color:signalColor,textAlign:"center",
+            fontFamily:T.mono}}>{signal}</div>
+        </div>
+        {/* Signal content */}
+        <div style={{flex:1,padding:"20px 22px"}}>
+          <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:8}}>
+            Hiring Signal
+          </div>
+          <div style={{fontSize:12,color:T.mid,lineHeight:1.8,marginBottom:14}}>
+            {signalMsg}
+          </div>
+          <div style={{display:"flex",gap:24}}>
+            {[
+              { label:"Avg utilization", val: fpct(avgRate), c: utilizationColor(avgRate) },
+              { label:"Weeks above 85%", val: `${overThreshold} / ${rates.length}`, c: overThreshold>=2?T.orange:T.sub },
+              { label:"Trend", val: trendLabel, c: trendColor },
+            ].map(s => (
+              <div key={s.label}>
+                <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.1em",
+                  textTransform:"uppercase",color:T.sub,marginBottom:4}}>{s.label}</div>
+                <div style={{fontSize:14,fontWeight:700,fontFamily:T.mono,color:s.c}}>{s.val}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ── Revenue per hour card ─────────────────────────────────────────
+function RevenuePerHour({ clientMap, weekCount }) {
+  const totalClientH = Object.entries(clientMap)
+    .filter(([k]) => k !== "Insendra")
+    .reduce((s,[,v])=>s+v,0);
+  const monthlyH   = weekCount > 0 ? totalClientH / weekCount * 4.33 : null;
+  const rph        = totalClientH > 0 ? TOTAL_MRR / (totalClientH / (weekCount / 4.33)) : null;
+  const billablePct = totalClientH > 0
+    ? totalClientH / Object.values(clientMap).reduce((s,v)=>s+v,0) : null;
+
+  // Top client by hours and its share of MRR
+  const topClient = Object.entries(clientMap)
+    .filter(([k])=>k!=="Insendra")
+    .sort((a,b)=>b[1]-a[1])[0];
+  const topConcentration = topClient && totalClientH > 0
+    ? topClient[1] / totalClientH : null;
+  const topMRR = topClient ? CLIENT_MRR[topClient[0]] || 0 : 0;
+  const topRevShare = topMRR / TOTAL_MRR;
+
+  return (
+    <Card style={{marginBottom:14}}>
+      <SectionHead title="Business Context" sub="Revenue lens on production hours"/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0}}>
+        {[
+          {
+            label: "Revenue per production hour",
+            val: rph ? `$${Math.round(rph)}` : "—",
+            sub: `${$m(TOTAL_MRR)}/mo MRR ÷ Enrique's billable hours`,
+            c: T.purple, big: true,
+          },
+          {
+            label: "Billable vs internal split",
+            val: fpct(billablePct),
+            sub: `${fh(totalClientH)} client · ${fh(Object.values(clientMap).reduce((s,v)=>s+v,0)-totalClientH)} internal`,
+            c: billablePct && billablePct >= 0.75 ? T.green : T.orange,
+          },
+          {
+            label: "Top client concentration",
+            val: topClient ? `${Math.round((topConcentration||0)*100)}%` : "—",
+            sub: topClient ? `${topClient[0]} · ${fh(topClient[1])} · ${$m(topMRR)}/mo` : "",
+            c: topConcentration && topConcentration >= 0.30 ? T.orange : T.sub,
+          },
+        ].map((s,i) => (
+          <div key={i} style={{padding:"18px 22px",
+            borderRight:i<2?`1px solid ${T.border}`:"none"}}>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",
+              textTransform:"uppercase",color:T.sub,marginBottom:9}}>{s.label}</div>
+            <div style={{fontSize:s.big?26:22,fontWeight:800,
+              color:s.c||T.text,lineHeight:1,fontFamily:T.mono,marginBottom:5}}>{s.val}</div>
+            <div style={{fontSize:10,color:T.sub,lineHeight:1.5}}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ── Team table ────────────────────────────────────────────────────
+function TeamTable({ personMap, weekObjs }) {
+  return (
+    <Card style={{marginBottom:14}}>
+      <SectionHead title="Team Breakdown" sub="All logged team members · billable target = 30h/wk"/>
+      <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <thead>
+          <tr>
+            {["Person","Total hours","Avg / week","Utilization","Weeks in range",""].map((h,i)=>(
+              <th key={i} style={{padding:"9px 18px",fontSize:10,fontWeight:700,
+                letterSpacing:"0.08em",textTransform:"uppercase",
+                textAlign:i>1?"right":"left",color:T.sub,
+                borderBottom:`1px solid ${T.border}`,background:"#FAFAFD"}}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(personMap)
+            .filter(([n])=>n!=="Unknown")
+            .sort((a,b)=>b[1].total-a[1].total)
+            .map(([name,data],i)=>{
+              const avg    = data.total / (weekObjs.length || 1);
+              const rate   = avg / BILLABLE_TARGET;
+              const c      = utilizationColor(rate);
+              const wksLogged = weekObjs.filter(w=>(data.byWeek[w.key]||0)>0).length;
+              return (
+                <tr key={name} style={{borderBottom:`1px solid ${T.border}`,
+                  background:i%2===0?T.white:"#FAFAFD"}}>
+                  <td style={{padding:"12px 18px",fontWeight:600,fontSize:13}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:28,height:28,borderRadius:8,
+                        background:T.purpleL,display:"flex",alignItems:"center",
+                        justifyContent:"center",fontSize:11,fontWeight:700,color:T.purple}}>
+                        {name[0]}
+                      </div>
+                      {name}
+                    </div>
+                  </td>
+                  <td style={{padding:"12px 18px",textAlign:"right",
+                    fontFamily:T.mono,fontSize:13}}>{fh(data.total)}</td>
+                  <td style={{padding:"12px 18px",textAlign:"right",
+                    fontFamily:T.mono,fontSize:13,color:c,fontWeight:600}}>{fh(avg)}</td>
+                  <td style={{padding:"12px 18px",textAlign:"right",width:180}}>
+                    <UtilBar rate={rate} h={avg} target={BILLABLE_TARGET}/>
+                  </td>
+                  <td style={{padding:"12px 18px",textAlign:"right",
+                    fontSize:12,color:T.sub,fontFamily:T.mono}}>
+                    {wksLogged} / {weekObjs.length}
+                  </td>
+                  <td style={{padding:"12px 18px",textAlign:"right"}}>
+                    <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",
+                      borderRadius:20,
+                      background:rate>=HIRE_THRESHOLD?T.redL:rate>=0.6?T.greenL:T.border,
+                      color:rate>=HIRE_THRESHOLD?T.red:rate>=0.6?T.green:T.sub}}>
+                      {rate>=HIRE_THRESHOLD?"High load":rate>=0.6?"On track":"Under-logging?"}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+// ── AI insights ───────────────────────────────────────────────────
+async function fetchAIInsights(prompt) {
+  const r = await fetch(`${PROXY}/ai-proxy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 900,
+      system: "Return ONLY valid JSON arrays. No markdown, no backticks, no prose.",
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  if (!r.ok) throw new Error("AI request failed");
+  const d = await r.json();
+  const raw = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+  return JSON.parse(raw.replace(/```json\s*/g,"").replace(/```\s*/g,"").trim());
+}
+
+// ── Main app ──────────────────────────────────────────────────────
+function App() {
+  const [range,    setRange]   = useState(8);
+  const [raw,      setRaw]     = useState(null);
+  const [loading,  setLoading] = useState(true);
+  const [err,      setErr]     = useState(null);
+  const [insights, setInsights]= useState(null);
+  const [insLoad,  setInsLoad] = useState(false);
+
+  // Fetch Harvest data
+  useEffect(() => {
+    setLoading(true); setErr(null); setRaw(null); setInsights(null);
+    fetch(`${PROXY}/harvest-data?weeks=${range}`)
+      .then(r => r.json().then(j => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => { if (!ok) throw new Error(j.error); setRaw(j); })
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, [range]);
+
+  // Compute derived data
+  const C = useMemo(() => {
+    if (!raw?.entries?.length) return null;
+    const entries = raw.entries;
+
+    const allWeeks  = [...new Set(entries.map(e => weekKey(e.spent_date)))].sort();
+    const weekObjs  = allWeeks.map(k => ({ key: k, label: fmtWk(k) }));
+
+    const personMap = {};
+    for (const e of entries) {
+      const fn = (e.user?.name || "Unknown").split(" ")[0];
+      if (!personMap[fn]) personMap[fn] = { total: 0, byWeek: {} };
+      personMap[fn].total += e.hours;
+      const wk = weekKey(e.spent_date);
+      personMap[fn].byWeek[wk] = (personMap[fn].byWeek[wk] || 0) + e.hours;
+    }
+
+    const clientMap = {};
+    const taskMap   = {};
+    for (const e of entries) {
+      if (!(e.user?.name || "").startsWith("Enrique")) continue;
+      const c = e.client?.name || "Unknown";
+      clientMap[c] = (clientMap[c] || 0) + e.hours;
+      const t = e.task?.name || "Unknown";
+      taskMap[t]  = (taskMap[t] || 0) + e.hours;
+    }
+
+    const enData   = personMap["Enrique"];
+    const enTotal  = enData?.total || 0;
+    const enAvg    = enTotal / (allWeeks.length || 1);
+    const enWeekly = enData?.byWeek || {};
+    const taskTot  = Object.values(taskMap).reduce((s,v)=>s+v,0);
+    const edPct    = taskTot > 0 ? (taskMap["Email Design"]||0) / taskTot : 0;
+
+    return {
+      weekObjs, personMap, clientMap, taskMap, taskTot,
+      enTotal: Math.round(enTotal*10)/10,
+      enAvg:   Math.round(enAvg*10)/10,
+      enWeekly, edPct,
+      weekCount: allWeeks.length,
+    };
+  }, [raw]);
+
+  async function loadInsights() {
+    if (!C) return;
+    setInsLoad(true); setInsights(null);
+    try {
+      const personSummary = Object.entries(C.personMap)
+        .filter(([n])=>n!=="Unknown")
+        .map(([n,d])=>`${n}: ${d.total.toFixed(1)}h total, ${(d.total/(C.weekCount||1)).toFixed(1)}h/wk avg`)
+        .join("; ");
+      const clientSummary = Object.entries(C.clientMap).sort((a,b)=>b[1]-a[1])
+        .map(([c,h])=>`${c}: ${h.toFixed(1)}h`).join("; ");
+      const taskSummary = Object.entries(C.taskMap).sort((a,b)=>b[1]-a[1])
+        .map(([t,h])=>`${t}: ${h.toFixed(1)}h`).join("; ");
+      const utilRates = C.weekObjs.map(w =>
+        ((C.enWeekly[w.key]||0)/BILLABLE_TARGET*100).toFixed(0)+"%"
+      ).join(", ");
+
+      const prompt = `You are analyzing ${range}-week Harvest time data for Insendra, a small email marketing agency.
+
+TEAM HOURS:
+${personSummary}
+
+ENRIQUE (sole production designer) — CLIENT BREAKDOWN:
+${clientSummary}
+
+ENRIQUE TASK TYPES:
+${taskSummary}
+
+ENRIQUE WEEKLY UTILIZATION (against 30h billable target):
+${utilRates}
+
+BUSINESS CONTEXT:
+- Total MRR: $${TOTAL_MRR.toLocaleString()}
+- Enrique's monthly salary: $2,000
+- Billable target: 30h/wk (6h/day)
+- Mariana is a new account manager, still ramping up
+- Low logged hours likely mean under-logging, not under-work
+
+Return exactly 4 CEO-level insights as a JSON array. Focus on: hiring decision, client risk, operational efficiency, and one forward-looking recommendation. Be specific with numbers.
+
+[{"type":"good"|"warn"|"info","emoji":"<emoji>","title":"<8 words max>","body":"<2 sentences, specific numbers, concrete action>"}]`;
+
+      const ins = await fetchAIInsights(prompt);
+      setInsights(ins);
+    } catch(e) { console.error(e); }
+    finally { setInsLoad(false); }
+  }
+
+  const RANGE_OPTS = [{ label: "4 weeks", val: 4 }, { label: "8 weeks", val: 8 }, { label: "12 weeks", val: 12 }];
+
+  return (
+    <div style={{minHeight:"100vh",background:T.bg,fontFamily:T.sans}}>
+      {/* Nav */}
+      <div style={{background:T.white,borderBottom:`1px solid ${T.border}`,height:60,
+        display:"flex",alignItems:"center",justifyContent:"space-between",
+        padding:"0 28px",position:"sticky",top:0,zIndex:30,
+        backdropFilter:"blur(12px)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:30,height:30,borderRadius:8,
+            background:"linear-gradient(135deg,#6D4DF4,#17D3DD)",
+            display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{color:"#fff",fontSize:14,fontWeight:800,fontFamily:T.mono}}>i</span>
+          </div>
+          <span style={{fontWeight:800,fontSize:15,letterSpacing:"-0.02em"}}>insendra</span>
+          <span style={{width:1,height:16,background:T.border,margin:"0 8px"}}/>
+          <span style={{fontSize:12,color:T.sub,fontWeight:500}}>Team Capacity</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {RANGE_OPTS.map(o => (
+            <button key={o.val} onClick={() => setRange(o.val)}
+              style={{padding:"5px 14px",
+                border:`1px solid ${range===o.val?T.purple:T.border}`,
+                background:range===o.val?T.purpleL:T.white,
+                color:range===o.val?T.purple:T.sub,
+                borderRadius:8,cursor:"pointer",fontSize:12,
+                fontWeight:range===o.val?700:400,fontFamily:T.sans}}>
+              {o.label}
+            </button>
+          ))}
+          <div style={{width:1,height:16,background:T.border,margin:"0 4px"}}/>
+          <a href="/dashboard"
+            style={{padding:"5px 14px",background:"none",
+              border:`1px solid ${T.border}`,color:T.sub,
+              borderRadius:8,cursor:"pointer",fontSize:12,
+              fontWeight:500,fontFamily:T.sans,textDecoration:"none"}}>
+            ← Dashboard
+          </a>
+        </div>
+      </div>
+
+      <div style={{padding:"24px 28px",maxWidth:1260,margin:"0 auto"}}>
+        {/* Page title */}
+        <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:18}}>
+          <div>
+            <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.02em",marginBottom:3}}>
+              Team Capacity
+            </div>
+            <div style={{fontSize:12,color:T.sub}}>
+              Live from Harvest · auto-updates on load
+              {raw ? ` · ${raw.from} → ${raw.to} · ${raw.count} entries` : ""}
+            </div>
+          </div>
+          {C && (
+            <div style={{fontSize:11,color:T.sub,textAlign:"right",fontFamily:T.mono,lineHeight:1.8}}>
+              Billable target: {BILLABLE_TARGET}h/wk (6h/day)<br/>
+              Hire watch: {Math.round(BILLABLE_TARGET*HIRE_THRESHOLD)}h/wk ({Math.round(HIRE_THRESHOLD*100)}%)
+            </div>
+          )}
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <div style={{display:"flex",alignItems:"center",gap:12,padding:"60px 0",
+            color:T.sub,fontSize:13}}>
+            <Spin s={22}/> Loading Harvest data…
+          </div>
+        )}
+
+        {/* Error */}
+        {!loading && err && (
+          <Card style={{padding:"24px",marginBottom:14}}>
+            <div style={{fontSize:13,fontWeight:700,color:T.red,marginBottom:8}}>
+              {err.includes("not configured") ? "Harvest not connected" : "Could not load data"}
+            </div>
+            <div style={{fontSize:12,color:T.sub,lineHeight:1.9}}>
+              {err.includes("not configured")
+                ? <>Add <code style={{background:T.bg,padding:"1px 5px",borderRadius:4,fontFamily:T.mono,fontSize:11}}>HARVEST_TOKEN</code> and <code style={{background:T.bg,padding:"1px 5px",borderRadius:4,fontFamily:T.mono,fontSize:11}}>HARVEST_ACCOUNT_ID</code> to Render → Environment. Generate a token at <strong>id.getharvest.com</strong>.</>
+                : err}
+            </div>
+          </Card>
+        )}
+
+        {/* Main content */}
+        {!loading && !err && C && (() => {
+          const enRate = C.enAvg / BILLABLE_TARGET;
+          return (
+            <>
+              {/* Top stat cards */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10,marginBottom:14}}>
+                <StatCard
+                  label="Enrique utilization"
+                  value={fpct(enRate)}
+                  sub={`${fh(C.enAvg)}/wk avg vs ${BILLABLE_TARGET}h target`}
+                  color={utilizationColor(enRate)}
+                  big
+                />
+                <StatCard
+                  label="Revenue / hour"
+                  value={C.enTotal > 0 ? `$${Math.round(TOTAL_MRR/(C.enTotal/(C.weekCount/4.33)))}` : "—"}
+                  sub={`${$m(TOTAL_MRR)}/mo MRR basis`}
+                  color={T.purple}
+                />
+                <StatCard
+                  label="Billable hours"
+                  value={fh(Object.entries(C.clientMap).filter(([k])=>k!=="Insendra").reduce((s,[,v])=>s+v,0))}
+                  sub={`of ${fh(C.enTotal)} total logged`}
+                  color={T.text}
+                />
+                <StatCard
+                  label="Internal time"
+                  value={fh(C.clientMap["Insendra"]||0)}
+                  sub="Insendra ops & overhead"
+                  color={T.sub}
+                />
+                <StatCard
+                  label="AM hours"
+                  value={fh((C.personMap["Jeremy"]?.total||0)+(C.personMap["Mariana"]?.total||0))}
+                  sub="Jeremy + Mariana combined"
+                  color={T.blue}
+                />
+                <StatCard
+                  label="Total entries"
+                  value={String(raw.count)}
+                  sub={`across ${C.weekObjs.length} weeks`}
+                  color={T.sub}
+                />
+              </div>
+
+              {/* Hiring signal — prominent */}
+              <HiringSignal weekObjs={C.weekObjs} weeklyHours={C.enWeekly}/>
+
+              {/* Revenue context */}
+              <RevenuePerHour clientMap={C.clientMap} weekCount={C.weekCount}/>
+
+              {/* Weekly chart + sparkline trend */}
+              <Card style={{marginBottom:14}}>
+                <SectionHead
+                  title="Weekly hours by person"
+                  sub="Stacked · dashed lines = 30h billable target (green) and 85% hire watch (orange)"
+                  right={
+                    <div style={{display:"flex",gap:16}}>
+                      {[
+                        ["Enrique",T.purple],["Jeremy",T.blue],["Mariana",T.green]
+                      ].filter(([n])=>C.personMap[n]).map(([n,c])=>(
+                        <span key={n} style={{display:"flex",alignItems:"center",gap:5,
+                          fontSize:11,color:T.sub}}>
+                          <span style={{width:10,height:10,borderRadius:2,background:c}}/>
+                          {n} · {fh(C.personMap[n]?.total)}
+                        </span>
+                      ))}
+                    </div>
+                  }
+                />
+                <div style={{padding:"16px 22px 22px"}}>
+                  <WeeklyChart weekObjs={C.weekObjs} personMap={C.personMap}/>
+                </div>
+              </Card>
+
+              {/* Utilization trend */}
+              <Card style={{marginBottom:14}}>
+                <SectionHead
+                  title="Enrique utilization trend"
+                  sub={`% of ${BILLABLE_TARGET}h billable target per week`}
+                />
+                <div style={{padding:"12px 22px 18px"}}>
+                  <TrendSparkline weekObjs={C.weekObjs} weeklyHours={C.enWeekly}/>
+                  <div style={{display:"flex",justifyContent:"space-between",
+                    marginTop:6,fontSize:10,color:T.sub,fontFamily:T.mono}}>
+                    {C.weekObjs.map((w,i) => (
+                      <div key={w.key} style={{textAlign:"center",minWidth:32}}>
+                        <div style={{
+                          color:utilizationColor((C.enWeekly[w.key]||0)/BILLABLE_TARGET),
+                          fontWeight:700,fontSize:11,marginBottom:2}}>
+                          {fpct((C.enWeekly[w.key]||0)/BILLABLE_TARGET)}
+                        </div>
+                        <div style={{fontSize:9,color:T.sub}}>{w.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+
+              {/* Client hours + task breakdown */}
+              <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:14,marginBottom:14}}>
+                <Card>
+                  <SectionHead title="Hours by client" sub="Enrique only · production load per account"/>
+                  <div style={{padding:"14px 20px 20px"}}>
+                    <ClientChart clientMap={C.clientMap}/>
+                  </div>
+                </Card>
+
+                <Card>
+                  <SectionHead title="Task type breakdown" sub="Enrique only · logging granularity"/>
+                  <div>
+                    {C.edPct > 0.75 && (
+                      <div style={{margin:"12px 16px 0",padding:"9px 12px",
+                        background:T.orangeL,borderRadius:8,fontSize:11,
+                        color:"#92400E",lineHeight:1.7}}>
+                        "Email Design" is <strong>{Math.round(C.edPct*100)}%</strong> of logged hours — too coarse for benchmarks. Recommended task names: <em>Campaign Email, Flow Email, Sign-Up Form, Revisions, QA</em>.
+                      </div>
+                    )}
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                      <thead>
+                        <tr>
+                          {["Task","Hours","%","$/hr effective"].map((h,i)=>(
+                            <th key={h} style={{padding:"8px 16px",
+                              textAlign:i>0?"right":"left",fontSize:10,fontWeight:700,
+                              letterSpacing:"0.08em",textTransform:"uppercase",
+                              color:T.sub,borderBottom:`1px solid ${T.border}`,
+                              background:"#FAFAFD"}}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(C.taskMap).sort((a,b)=>b[1]-a[1]).map(([task,hrs],i)=>{
+                          const p   = C.taskTot > 0 ? hrs/C.taskTot : 0;
+                          const rph = C.enTotal > 0 ? TOTAL_MRR/(C.enTotal/(C.weekCount/4.33)) : 0;
+                          return (
+                            <tr key={task} style={{borderBottom:`1px solid ${T.border}`,
+                              background:i%2===0?T.white:"#FAFAFD"}}>
+                              <td style={{padding:"9px 16px",fontWeight:500}}>{task}</td>
+                              <td style={{padding:"9px 16px",textAlign:"right",fontFamily:T.mono}}>{hrs.toFixed(1)}h</td>
+                              <td style={{padding:"9px 16px",textAlign:"right"}}>
+                                <span style={{fontSize:11,fontWeight:700,padding:"2px 7px",
+                                  borderRadius:6,fontFamily:T.mono,
+                                  background:p>0.7?T.orangeL:T.purpleL,
+                                  color:p>0.7?"#92400E":T.purple}}>
+                                  {Math.round(p*100)}%
+                                </span>
+                              </td>
+                              <td style={{padding:"9px 16px",textAlign:"right",
+                                fontFamily:T.mono,color:T.sub,fontSize:11}}>
+                                ${Math.round(rph)}/h
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </div>
+
+              {/* Team table */}
+              <TeamTable personMap={C.personMap} weekObjs={C.weekObjs}/>
+
+              {/* AI insights */}
+              <Card style={{marginBottom:32}}>
+                <SectionHead
+                  title="✦ AI Capacity Analysis"
+                  sub="CEO-level hiring signal and operational recommendations"
+                  right={
+                    <button onClick={loadInsights} disabled={insLoad}
+                      style={{display:"flex",alignItems:"center",gap:6,background:"none",
+                        border:`1px solid ${T.border}`,borderRadius:8,padding:"5px 12px",
+                        cursor:insLoad?"not-allowed":"pointer",fontSize:11,color:T.sub,
+                        fontFamily:T.sans,fontWeight:500}}>
+                      {insLoad?<><Spin s={12}/> Analyzing…</>:insights?"↻ Refresh":"Analyze ✦"}
+                    </button>
+                  }
+                />
+                {insLoad ? (
+                  <div style={{display:"flex",alignItems:"center",gap:10,padding:"20px",
+                    color:T.sub,fontSize:13}}>
+                    <Spin s={16}/> Analyzing capacity data…
+                  </div>
+                ) : insights ? (
+                  <div style={{padding:"10px 16px"}}>
+                    {insights.map((ins,i)=>{
+                      const bg={good:T.greenL,warn:T.orangeL,info:T.blueL}[ins.type]||T.blueL;
+                      return (
+                        <div key={i} style={{display:"flex",gap:14,padding:"14px 4px",
+                          borderBottom:i<insights.length-1?`1px solid ${T.border}`:"none"}}>
+                          <div style={{width:38,height:38,borderRadius:10,flexShrink:0,
+                            background:bg,display:"flex",alignItems:"center",
+                            justifyContent:"center",fontSize:"1.1rem"}}>{ins.emoji}</div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:13,fontWeight:700,marginBottom:4}}>{ins.title}</div>
+                            <div style={{fontSize:12,color:T.mid,lineHeight:1.8}}>{ins.body}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{padding:"28px",textAlign:"center",fontSize:13,color:T.sub}}>
+                    Click "Analyze ✦" to generate AI-powered hiring signal and capacity insights.
+                  </div>
+                )}
+              </Card>
+            </>
+          );
+        })()}
+
+        {!loading && !err && !C && raw && (
+          <Card style={{padding:"40px 24px",textAlign:"center"}}>
+            <div style={{fontSize:14,color:T.sub}}>No time entries found for this period.</div>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
