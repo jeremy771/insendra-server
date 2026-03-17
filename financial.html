@@ -552,8 +552,8 @@ function renderSettings(){
 
   document.getElementById('empTable').innerHTML=`<thead><tr><th>Name</th><th>Role</th><th>Type</th><th>Salary/mo</th><th>Hrs/wk</th><th></th></tr></thead><tbody>${D.employees.map((e,i)=>`<tr>
     <td><input class="ei" value="${e.name}" oninput="uE(${i},'name',this.value)"></td>
-    <td><select class="ei" style="width:128px" onchange="uE(${i},'role',this.value)">${ROLES.map(r=>`<option ${e.role===r?'selected':''}>${r}</option>`).join('')}</select></td>
-    <td><select class="ei" style="width:110px" onchange="uE(${i},'type',this.value)"><option ${e.type==='pod'?'selected':''}>pod</option><option ${e.type==='operational'?'selected':''}>operational</option></select></td>
+    <td><select class="ei" style="width:128px" onchange="uES(${i},'role',this.value)">${ROLES.map(r=>`<option ${e.role===r?'selected':''}>${r}</option>`).join('')}</select></td>
+    <td><select class="ei" style="width:110px" onchange="uES(${i},'type',this.value)"><option ${e.type==='pod'?'selected':''}>pod</option><option ${e.type==='operational'?'selected':''}>operational</option></select></td>
     <td><input class="ei num" type="number" value="${e.monthlySalary}" oninput="uE(${i},'monthlySalary',+this.value)"></td>
     <td><input class="ei num sm" type="number" value="${e.weeklyCapacityHours}" oninput="uE(${i},'weeklyCapacityHours',+this.value)"></td>
     <td><button class="del" onclick="dE(${i})" title="Remove">×</button></td>
@@ -575,13 +575,30 @@ function renderSettings(){
   </tr>`).join('')}</tbody>`;
 }
 
+// Debounced rerender — waits 600ms after last call before re-rendering
+// This prevents the settings panel from re-rendering mid-keystroke
+let _rrTimer = null;
+function dRR() {
+  clearTimeout(_rrTimer);
+  _rrTimer = setTimeout(() => {
+    const at = document.querySelector('.tab.active')?.dataset?.tab;
+    if (at === 'overview')   renderOverview();
+    if (at === 'pods')       renderPods();
+    if (at === 'calculator') runCalc();
+    // Settings panel intentionally NOT re-rendered on debounce — inputs stay focused
+  }, 600);
+}
+
 function onMarginChange(v){document.getElementById('marginVal').textContent=v+'%';D.settings.targetMargin=v/100;save();rr();}
 function onUtilChange(v) {document.getElementById('utilVal').textContent=v+'%';D.settings.utilizationTarget=v/100;save();rr();}
 function setM(v){D.settings.overheadMethod=v;save();rr();}
-function uE(i,k,v){D.employees[i][k]=v;save();rr();}
-function uC(i,k,v){if(k==='rev')D.clients[i].monthlyRevenue=v;else D.clients[i][k]=v;save();rr();}
-function uT(i,k,v){if(!D.clients[i].taskVolumes)D.clients[i].taskVolumes={};D.clients[i].taskVolumes[k]=v;save();rr();}
-function uF(i,k,v){D.fixedCosts[i][k]=v;save();rr();}
+// Typing inputs: update data + debounced rerender (no settings re-render mid-type)
+function uE(i,k,v){D.employees[i][k]=v;save();dRR();}
+function uC(i,k,v){if(k==='rev')D.clients[i].monthlyRevenue=v;else D.clients[i][k]=v;save();dRR();}
+function uT(i,k,v){if(!D.clients[i].taskVolumes)D.clients[i].taskVolumes={};D.clients[i].taskVolumes[k]=v;save();dRR();}
+function uF(i,k,v){D.fixedCosts[i][k]=v;save();dRR();}
+// Select dropdowns & destructive actions: immediate full re-render is fine
+function uES(i,k,v){D.employees[i][k]=v;save();rr();}
 function dE(i){D.employees.splice(i,1);save();rr();}
 function dC(i){D.clients.splice(i,1);save();rr();}
 function dF(i){D.fixedCosts.splice(i,1);save();rr();}
