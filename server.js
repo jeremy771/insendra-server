@@ -1332,6 +1332,24 @@ app.get("/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "dashboard.html"));
 });
 
+app.get("/accountability", (req, res) => {
+  res.sendFile(path.join(__dirname, "accountability.html"));
+});
+
+app.get("/financial", (req, res) => {
+  res.sendFile(path.join(__dirname, "financial.html"));
+});
+
+app.get("/api/insendra-data", (req, res) => {
+  const dataPath = path.join(__dirname, "data", "insendra-data.json");
+  try {
+    const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load financial data" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Insendra server running on port ${PORT}`);
   // Load dynamic config from Airtable on startup, then start polling
