@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Financial Overview · Insendra OS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@700;800;900&family=Manrope:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    @font-face {
+      font-family: 'Deuterium Variable';
+      src: local('Deuterium Variable'), local('DeuteriumVariable');
+      font-display: swap;
+    }
+  </style>
+  <style>
+    :root {
+      --purple:      #6D4DF4;
+      --purple-soft: #917FDD;
+      --purple-bg:   #F3F0FF;
+      --green:       #15D197;
+      --green-light: #64F2C6;
+      --green-bg:    #EDFDF7;
+      --cyan:        #17D3DD;
+      --cyan-light:  #58EBF3;
+      --cyan-bg:     #EDFBFC;
+      --pink:        #E44DF4;
+      --pink-light:  #E991F2;
+      --pink-bg:     #FDF0FF;
+      --amber:       #F59E0B;
+      --amber-bg:    #FFFBEB;
+      --red:         #EF4444;
+      --red-bg:      #FEF2F2;
+      --bg:          #FFFFFF;
+      --surface:     #FAFAFA;
+      --border:      #EBEBF0;
+      --text:        #1A1025;
+      --text-mid:    #5C5475;
+      --text-dim:    #9C93B8;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { min-height: 100%; background: #fff; color: var(--text); font-family: 'Manrope', 'Jost', sans-serif; -webkit-font-smoothing: antialiased; }
+
+    body::before {
+      content: ''; position: fixed; top: -140px; right: -140px;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(109,77,244,0.06) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* NAV */
+    .nav {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 56px; height: 64px;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-left { display: flex; align-items: center; gap: 16px; }
+    .back-btn {
+      display: flex; align-items: center; gap: 6px;
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+      color: var(--text-dim); text-decoration: none; letter-spacing: 0.5px;
+      transition: color 0.15s; padding: 4px 0;
+    }
+    .back-btn:hover { color: var(--purple); }
+    .nav-div { width: 1px; height: 18px; background: var(--border); }
+    .nav-crumb {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+      color: var(--text-mid); letter-spacing: 1.5px; text-transform: uppercase;
+    }
+    .nav-right { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
+
+    /* LOADING */
+    .main { position: relative; z-index: 1; max-width: 1020px; margin: 0 auto; padding: 56px 56px 96px; }
+    .state-center {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 50vh; gap: 16px; text-align: center;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 2px solid var(--border);
+      border-top-color: var(--purple);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .state-text { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); }
+
+    /* PAGE HEADER */
+    @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+    .page-header {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      margin-bottom: 48px; gap: 20px; flex-wrap: wrap;
+      animation: rise 0.4s ease both;
+    }
+    .page-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      letter-spacing: 3px; text-transform: uppercase; color: var(--purple); margin-bottom: 12px;
+    }
+    .eyebrow-bar { width: 24px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--purple), var(--cyan)); }
+    .page-title { font-family: 'Deuterium Variable', 'League Spartan', sans-serif; font-size: 38px; font-weight: 900; color: var(--text); }
+    .page-meta { font-size: 12px; color: var(--text-dim); text-align: right; line-height: 1.8; }
+
+    /* SECTION */
+    .section-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; margin-top: 48px; }
+    .section-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-dim); white-space: nowrap; }
+    .section-rule { flex: 1; height: 1px; background: var(--border); }
+
+    /* KPI GRID */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    @media (max-width: 680px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .kpi-card {
+      background: #fff; border: 1.5px solid var(--border); border-radius: 16px;
+      padding: 24px; display: flex; flex-direction: column; gap: 8px;
+      animation: rise 0.4s ease both;
+    }
+    .kpi-card:nth-child(1) { animation-delay: 0.05s; border-top: 3px solid var(--purple); }
+    .kpi-card:nth-child(2) { animation-delay: 0.10s; border-top: 3px solid var(--pink); }
+    .kpi-card:nth-child(3) { animation-delay: 0.15s; }
+    .kpi-card:nth-child(4) { animation-delay: 0.20s; }
+
+    .kpi-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
+    .kpi-value { font-family: 'Deuterium Variable', 'League Spartan', sans-serif; font-size: 32px; font-weight: 900; line-height: 1; color: var(--text); }
+    .kpi-sub { font-size: 11px; color: var(--text-dim); font-weight: 300; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 1px;
+      font-weight: 500; padding: 3px 9px; border-radius: 100px; width: fit-content;
+    }
+    .badge-green  { background: var(--green-bg);  color: var(--green);  }
+    .badge-amber  { background: var(--amber-bg);  color: var(--amber);  }
+    .badge-red    { background: var(--red-bg);    color: var(--red);    }
+    .badge-purple { background: var(--purple-bg); color: var(--purple); }
+    .badge-pink   { background: var(--pink-bg);   color: var(--pink);   }
+
+    /* CARD */
+    .card { background: #fff; border: 1.5px solid var(--border); border-radius: 16px; padding: 28px; animation: rise 0.4s ease both; }
+    .card-title { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 24px; }
+
+    /* TWO COL */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 680px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* BURN BARS */
+    .burn-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+    .burn-row:last-of-type { margin-bottom: 0; }
+    .burn-row-top { display: flex; justify-content: space-between; align-items: center; }
+    .burn-name { font-size: 13px; color: var(--text-mid); font-weight: 300; }
+    .burn-value { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); }
+    .burn-track { height: 5px; background: var(--surface); border-radius: 3px; overflow: hidden; border: 1px solid var(--border); }
+    .burn-fill { height: 100%; border-radius: 3px; transition: width 0.7s cubic-bezier(0.23,1,0.32,1); }
+    .burn-total-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-top: 16px; border-top: 1px solid var(--border); margin-top: 18px;
+    }
+    .burn-total-label { font-size: 13px; font-weight: 500; color: var(--text); }
+    .burn-total-value { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 500; color: var(--pink); }
+
+    /* TARGET ROWS */
+    .target-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    .target-row:last-child { border-bottom: none; }
+    .target-label { font-size: 13px; color: var(--text-mid); font-weight: 300; }
+    .target-val { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text); }
+
+    /* CLIENT TABLE */
+    .client-table { width: 100%; border-collapse: collapse; }
+    .client-table th {
+      font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--text-dim);
+      text-align: left; padding: 0 0 14px; border-bottom: 1px solid var(--border);
+    }
+    .client-table th.num { text-align: right; }
+    .client-table td { padding: 16px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .client-table tr:last-child td { border-bottom: none; }
+    .client-table tbody tr:hover td { background: var(--purple-bg); border-radius: 8px; }
+    .client-name { font-family: 'Deuterium Variable', 'League Spartan', sans-serif; font-size: 15px; font-weight: 800; color: var(--text); }
+    .client-tasks { font-size: 11px; color: var(--text-dim); margin-top: 2px; font-weight: 300; }
+    .mono { font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: right; color: var(--text-mid); }
+    .mono-bold { color: var(--text); font-weight: 500; }
+
+    .margin-wrap { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+    .margin-track { width: 56px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .margin-fill { height: 100%; border-radius: 2px; }
+    .margin-pct { font-family: 'JetBrains Mono', monospace; font-size: 12px; min-width: 46px; text-align: right; }
+
+    /* TOTALS ROW */
+    .totals-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--border); }
+    .totals-label { font-size: 14px; font-weight: 500; }
+    .totals-right { display: flex; gap: 32px; }
+    .totals-right .mono { font-size: 14px; font-weight: 500; }
+
+    /* CAPACITY */
+    .cap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+    .cap-card { background: #fff; border: 1.5px solid var(--border); border-radius: 14px; padding: 22px; animation: rise 0.4s ease both; }
+    .cap-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .cap-role { font-family: 'Deuterium Variable', 'League Spartan', sans-serif; font-size: 16px; font-weight: 800; }
+    .cap-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .cap-fill { height: 100%; border-radius: 3px; transition: width 0.7s cubic-bezier(0.23,1,0.32,1); }
+    .cap-footer { display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; color: var(--text-dim); font-weight: 300; }
+    .cap-pct { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-left">
+    <a href="/dashboard" class="back-btn">← OS Home</a>
+    <div class="nav-div"></div>
+    <div class="nav-crumb">Financial Overview</div>
+  </div>
+  <div class="nav-right" id="lastUpdated"></div>
+</nav>
+
+<main class="main" id="app">
+  <div class="state-center" id="loading">
+    <div class="spinner"></div>
+    <div class="state-text">Loading financial data…</div>
+  </div>
+</main>
+
+<script>
+const ROLE_LABELS = { design:'Designer', copy:'Copywriter', am:'Account Manager', executive:'Executive', admin:'Admin', strategy:'Strategist', coo:'COO', cro:'CRO', finance:'Finance', hr:'HR', dev:'Developer' };
+const rl  = r => ROLE_LABELS[r] || r;
+const fmt = v => '$' + Math.round(v).toLocaleString();
+const pct = v => (v * 100).toFixed(1) + '%';
+
+function compute(d) {
+  const { employees, clients, fixedCosts, settings, taskTypes, roleRates } = d;
+  const delivery    = employees.filter(e => e.type === 'pod');
+  const operational = employees.filter(e => e.type === 'operational');
+  const podSalary   = delivery.reduce((s, e) => s + e.monthlySalary, 0);
+  const opSalary    = operational.reduce((s, e) => s + e.monthlySalary, 0);
+  const fixedTotal  = fixedCosts.reduce((s, f) => s + f.monthlyCost, 0);
+  const totalBurn   = podSalary + opSalary + fixedTotal;
+
+  const enriched = clients.map(c => {
+    const byRole = {};
+    taskTypes.forEach(tt => {
+      Object.keys(roleRates).forEach(role => {
+        byRole[role] = (byRole[role] || 0) + (c.taskVolumes?.[tt.id] || 0) * (roleRates[role]?.[tt.id] || 0);
+      });
+    });
+    const totalHours = Object.values(byRole).reduce((s, v) => s + v, 0);
+    return { ...c, hoursByRole: byRole, totalHours, revenue: c.monthlyRevenue };
+  });
+
+  const totalRevenue = enriched.reduce((s, c) => s + c.revenue, 0);
+  const totalHrsAll  = enriched.reduce((s, c) => s + c.totalHours, 0);
+
+  const clientResults = enriched.map(c => {
+    let share = settings.overheadMethod === 'revenue'
+      ? (totalRevenue === 0 ? 0 : c.revenue / totalRevenue)
+      : settings.overheadMethod === 'hours'
+        ? (totalHrsAll === 0 ? 0 : c.totalHours / totalHrsAll)
+        : (enriched.length === 0 ? 0 : 1 / enriched.length);
+    const overhead = totalBurn * share;
+    const profit   = c.revenue - overhead;
+    return { ...c, overhead, profit, margin: c.revenue === 0 ? 0 : profit / c.revenue };
+  });
+
+  const cap = {}, demand = {};
+  delivery.forEach(e => { cap[e.role] = (cap[e.role] || 0) + (e.weeklyCapacityHours || 0) * 4; });
+  clientResults.forEach(c => Object.entries(c.hoursByRole).forEach(([r, h]) => { demand[r] = (demand[r] || 0) + h; }));
+
+  const totalProfit = totalRevenue - totalBurn;
+  return {
+    totals: { revenue: totalRevenue, burn: totalBurn, profit: totalProfit, margin: totalRevenue === 0 ? 0 : totalProfit / totalRevenue, podSalary, opSalary, fixedTotal },
+    clients: clientResults, cap, demand, settings
+  };
+}
+
+function mColor(m, t) {
+  if (m >= t)        return { fill: '#15D197', text: '#15D197', badge: 'badge-green' };
+  if (m >= t * 0.7)  return { fill: '#F59E0B', text: '#F59E0B', badge: 'badge-amber' };
+  return                    { fill: '#EF4444', text: '#EF4444', badge: 'badge-red'   };
+}
+function cColor(u) {
+  if (u > 1)   return '#EF4444';
+  if (u > 0.9) return '#F59E0B';
+  return               '#15D197';
+}
+
+function render(data) {
+  const m = compute(data);
+  const { totals, clients, cap, demand, settings } = m;
+  const tgt = settings.targetMargin;
+  const lu = document.getElementById('lastUpdated');
+  if (lu && data.lastUpdated) lu.textContent = 'Updated ' + data.lastUpdated;
+
+  const profitColor = totals.profit >= 0 ? '#15D197' : '#EF4444';
+  const mc = mColor(totals.margin, tgt);
+
+  const clientRows = clients.map(c => {
+    const mc2 = mColor(c.margin, tgt);
+    const bw  = Math.min(Math.max(c.margin, 0) * 100, 100);
+    const tasks = Object.entries(c.taskVolumes || {}).filter(([,v])=>v>0).map(([k,v])=>`${v} ${k}`).join(' · ');
+    const pc = c.profit >= 0 ? '#15D197' : '#EF4444';
+    return `<tr>
+      <td><div class="client-name">${c.name}</div><div class="client-tasks">${tasks}</div></td>
+      <td class="mono mono-bold">${fmt(c.revenue)}</td>
+      <td class="mono">${c.totalHours.toFixed(1)} hrs</td>
+      <td class="mono">${fmt(c.overhead)}</td>
+      <td class="mono" style="color:${pc};font-weight:500">${fmt(c.profit)}</td>
+      <td><div class="margin-wrap">
+        <div class="margin-track"><div class="margin-fill" style="width:${bw}%;background:${mc2.fill}"></div></div>
+        <div class="margin-pct" style="color:${mc2.text}">${pct(c.margin)}</div>
+      </div></td>
+    </tr>`;
+  }).join('');
+
+  const totalRev2    = clients.reduce((s,c)=>s+c.revenue,0);
+  const totalProfit2 = clients.reduce((s,c)=>s+c.profit,0);
+  const pc2 = totalProfit2 >= 0 ? '#15D197' : '#EF4444';
+
+  const bPct = v => totals.burn === 0 ? 0 : v/totals.burn*100;
+  const burnRows = [
+    { label:'Pod Delivery Salaries', value:totals.podSalary,  color:'#6D4DF4' },
+    { label:'Operational Salaries',  value:totals.opSalary,   color:'#E44DF4' },
+    { label:'Fixed Costs',           value:totals.fixedTotal, color:'#17D3DD' },
+  ].map(r=>`<div class="burn-row">
+    <div class="burn-row-top"><span class="burn-name">${r.label}</span><span class="burn-value">${fmt(r.value)}</span></div>
+    <div class="burn-track"><div class="burn-fill" style="width:${bPct(r.value)}%;background:${r.color}"></div></div>
+  </div>`).join('');
+
+  const podRoles = [...new Set([...Object.keys(cap),...Object.keys(demand)])];
+  const capCards = podRoles.map((role,i)=>{
+    const c2 = cap[role]||0, d2 = demand[role]||0;
+    const u = c2===0 ? (d2>0?1.01:0) : d2/c2;
+    const col = cColor(u);
+    const pw = Math.min(u*100,100).toFixed(0);
+    const status = u>1?'Over capacity':u>0.9?'Near capacity':'Healthy';
+    const bcls   = u>1?'badge-red':u>0.9?'badge-amber':'badge-green';
+    return `<div class="cap-card" style="animation-delay:${0.05+i*0.05}s">
+      <div class="cap-header"><div class="cap-role">${rl(role)}</div><span class="badge ${bcls}">${status}</span></div>
+      <div class="cap-track"><div class="cap-fill" style="width:${pw}%;background:${col}"></div></div>
+      <div class="cap-footer"><span>${d2.toFixed(0)} demand / ${c2.toFixed(0)} capacity hrs</span><span class="cap-pct" style="color:${col}">${pw}%</span></div>
+    </div>`;
+  }).join('');
+
+  const methodLabel = { revenue:'By Revenue', hours:'By Hours', equal:'Equal Split' }[settings.overheadMethod] || settings.overheadMethod;
+  const revenueNeeded = totals.burn / (1 - tgt);
+  const revenueGap = Math.max(0, revenueNeeded - totals.revenue);
+  const marginGap = totals.margin - tgt;
+
+  document.getElementById('app').innerHTML = `
+    <div class="page-header">
+      <div>
+        <div class="page-eyebrow"><div class="eyebrow-bar"></div>Financial Overview</div>
+        <h1 class="page-title">Business P&amp;L</h1>
+      </div>
+      <div class="page-meta">
+        ${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}<br>
+        <span>Overhead: ${methodLabel}</span>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Monthly Revenue</div>
+        <div class="kpi-value" style="color:var(--purple)">${fmt(totals.revenue)}</div>
+        <div class="kpi-sub">${clients.length} active clients</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Monthly Burn</div>
+        <div class="kpi-value" style="color:var(--pink)">${fmt(totals.burn)}</div>
+        <div class="kpi-sub">Salaries + overhead</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Net Profit</div>
+        <div class="kpi-value" style="color:${profitColor}">${fmt(totals.profit)}</div>
+        <span class="badge ${totals.profit>=0?'badge-green':'badge-red'}">${totals.profit>=0?'↑ Profitable':'↓ Loss'}</span>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Net Margin</div>
+        <div class="kpi-value" style="color:${mc.text}">${pct(totals.margin)}</div>
+        <span class="badge ${mc.badge}">${totals.margin>=tgt?'Above target':totals.margin>=tgt*0.7?'Near target':'Below target'}</span>
+      </div>
+    </div>
+
+    <div class="section-head" style="animation:rise 0.4s 0.1s ease both">
+      <div class="section-label">Cost Structure</div><div class="section-rule"></div>
+    </div>
+    <div class="two-col" style="animation:rise 0.4s 0.12s ease both">
+      <div class="card">
+        <div class="card-title">Monthly Burn Breakdown</div>
+        ${burnRows}
+        <div class="burn-total-row">
+          <span class="burn-total-label">Total Monthly Burn</span>
+          <span class="burn-total-value">${fmt(totals.burn)}</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Financial Targets</div>
+        <div class="target-row"><span class="target-label">Target margin</span><span class="target-val" style="color:var(--purple)">${pct(tgt)}</span></div>
+        <div class="target-row"><span class="target-label">Actual margin</span><span class="target-val" style="color:${mc.text}">${pct(totals.margin)}</span></div>
+        <div class="target-row"><span class="target-label">Margin gap</span><span class="target-val" style="color:${marginGap>=0?'#15D197':'#EF4444'}">${marginGap>=0?'+':''}${pct(marginGap)}</span></div>
+        <div class="target-row"><span class="target-label">Revenue needed @ target</span><span class="target-val">${fmt(revenueNeeded)}</span></div>
+        <div class="target-row"><span class="target-label">Revenue gap to close</span><span class="target-val" style="color:${revenueGap===0?'#15D197':'#F59E0B'}">${revenueGap===0?'✓ On track':fmt(revenueGap)}</span></div>
+        <div class="target-row"><span class="target-label">Overhead method</span><span class="target-val" style="color:var(--cyan)">${methodLabel}</span></div>
+      </div>
+    </div>
+
+    <div class="section-head" style="animation:rise 0.4s 0.18s ease both">
+      <div class="section-label">Client P&amp;L</div><div class="section-rule"></div>
+    </div>
+    <div class="card" style="animation:rise 0.4s 0.2s ease both;overflow-x:auto">
+      <table class="client-table">
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th class="num">Revenue</th>
+            <th class="num">Hours</th>
+            <th class="num">Allocated Cost</th>
+            <th class="num">Profit</th>
+            <th class="num">Margin</th>
+          </tr>
+        </thead>
+        <tbody>${clientRows}</tbody>
+        <tfoot>
+          <tr><td colspan="6">
+            <div class="totals-row">
+              <span class="totals-label">Totals</span>
+              <div class="totals-right">
+                <span class="mono" style="color:var(--purple)">${fmt(totalRev2)}</span>
+                <span class="mono" style="color:${pc2}">${fmt(totalProfit2)}</span>
+                <span class="mono" style="color:${pc2}">${pct(totalRev2===0?0:totalProfit2/totalRev2)}</span>
+              </div>
+            </div>
+          </td></tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div class="section-head" style="animation:rise 0.4s 0.26s ease both">
+      <div class="section-label">Team Capacity</div><div class="section-rule"></div>
+    </div>
+    <div class="cap-grid" style="animation:rise 0.4s 0.28s ease both">${capCards}</div>
+  `;
+}
+
+fetch('/api/insendra-data')
+  .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+  .then(render)
+  .catch(err => {
+    document.getElementById('app').innerHTML = `
+      <div class="state-center">
+        <div style="font-size:40px">⚠️</div>
+        <div class="state-text" style="color:var(--red)">Could not load financial data</div>
+        <div class="state-text">${err.message}</div>
+        <div class="state-text" style="color:var(--text-dim);margin-top:8px">Make sure /api/insendra-data is returning your insendra-data.json</div>
+      </div>`;
+  });
+</script>
+</body>
+</html>
