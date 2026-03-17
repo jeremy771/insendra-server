@@ -816,68 +816,57 @@ Be specific with numbers. No hiring recommendations unless utilization is genuin
 
         {/* Main content */}
         {!loading && !err && C && (() => {
-          const enRate = C.enAvg / BILLABLE_TARGET;
+          const totalH     = Object.values(C.personMap).reduce((s,d)=>s+d.total,0);
+          const billableH  = Object.entries(C.clientMap).filter(([k])=>k!=="Insendra").reduce((s,[,v])=>s+v,0);
+          const internalH  = C.clientMap["Insendra"]||0;
+          const billablePct = totalH > 0 ? billableH/totalH : 0;
+          const rph        = billableH > 0 ? TOTAL_MRR/(billableH/(C.weekCount/4.33)) : null;
+          const unusedH    = Math.max(0, Math.round((BILLABLE_TARGET - C.enAvg) * C.weekObjs.length));
+          const teamCost   = Math.round((2000 + 2500 * (C.weekCount/4.33)) / (C.weekCount/4.33)); // rough monthly
+          const enRate     = C.enAvg / BILLABLE_TARGET;
+
+          const ROLES = { Enrique:"Production", Jeremy:"Founder / AM", Mariana:"Account Manager" };
+          const COLORS = { Enrique:T.purple, Jeremy:T.blue, Mariana:T.green };
+          const SALARIES = { Enrique:2000, Jeremy:3500, Mariana:2500 };
+
           return (
             <>
-              {/* Top stat cards */}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10,marginBottom:14}}>
-                <StatCard
-                  label="Enrique utilization"
-                  value={fpct(enRate)}
-                  sub={`${fh(C.enAvg)}/wk avg vs ${BILLABLE_TARGET}h target`}
-                  color={utilizationColor(enRate)}
-                  big
-                />
-                <StatCard
-                  label="Revenue / hour"
-                  value={C.enTotal > 0 ? `$${Math.round(TOTAL_MRR/(C.enTotal/(C.weekCount/4.33)))}` : "—"}
-                  sub={`${$m(TOTAL_MRR)}/mo MRR basis`}
-                  color={T.purple}
-                />
-                <StatCard
-                  label="Billable hours"
-                  value={fh(Object.entries(C.clientMap).filter(([k])=>k!=="Insendra").reduce((s,[,v])=>s+v,0))}
-                  sub={`of ${fh(C.enTotal)} total logged`}
-                  color={T.text}
-                />
-                <StatCard
-                  label="Internal time"
-                  value={fh(C.clientMap["Insendra"]||0)}
-                  sub="Insendra ops & overhead"
-                  color={T.sub}
-                />
-                <StatCard
-                  label="AM hours"
-                  value={fh((C.personMap["Jeremy"]?.total||0)+(C.personMap["Mariana"]?.total||0))}
-                  sub="Jeremy + Mariana combined"
-                  color={T.blue}
-                />
-                <StatCard
-                  label="Total entries"
-                  value={String(raw.count)}
-                  sub={`across ${C.weekObjs.length} weeks`}
-                  color={T.sub}
-                />
+              {/* ── Team overview stat strip ── */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(155px,1fr))",gap:10,marginBottom:14}}>
+                <StatCard big label="Total hours logged" value={fh(totalH)}
+                  sub={`whole team · ${C.weekObjs.length} weeks`} color={T.text}/>
+                <StatCard label="Billable hours" value={fh(billableH)}
+                  sub={`${Math.round(billablePct*100)}% of all logged time`}
+                  color={billablePct>=0.7?T.green:T.orange}/>
+                <StatCard label="Internal overhead" value={fh(internalH)}
+                  sub={`${Math.round((1-billablePct)*100)}% of total — Insendra ops`}
+                  color={T.sub}/>
+                <StatCard label="Revenue / billable hr" value={rph?`$${Math.round(rph)}`:"—"}
+                  sub={`${$m(TOTAL_MRR)}/mo MRR basis`} color={T.purple}/>
+                <StatCard label="Capacity available" value={unusedH+"h"}
+                  sub={`Enrique vs 30h/wk target · ${C.weekObjs.length} wks`}
+                  color={unusedH>20?T.blue:T.green}/>
+                <StatCard label="Entries logged" value={String(raw.count)}
+                  sub={`${C.weekObjs.length} weeks · ${raw.from} → ${raw.to}`}
+                  color={T.sub}/>
               </div>
 
-              {/* Hiring signal — prominent */}
+              {/* ── Hiring signal ── */}
               <HiringSignal weekObjs={C.weekObjs} weeklyHours={C.enWeekly}/>
 
-              {/* Revenue context */}
+              {/* ── Revenue context ── */}
               <RevenuePerHour clientMap={C.clientMap} weekCount={C.weekCount}/>
 
-              {/* Weekly chart + sparkline trend */}
+              {/* ── Weekly chart ── */}
               <Card style={{marginBottom:14}}>
                 <SectionHead
                   title="Weekly hours by person"
-                  sub="Stacked · dashed lines = 30h billable target (green) and 85% hire watch (orange)"
+                  sub="Dashed lines = 30h billable target (green) and 85% hire watch (orange)"
                   right={
                     <div style={{display:"flex",gap:16}}>
-                      {[
-                        ["Enrique",T.purple],["Jeremy",T.blue],["Mariana",T.green]
-                      ].filter(([n])=>C.personMap[n]).map(([n,c])=>(
-                        <span key={n} style={{display:"flex",alignItems:"center",gap:5,
-                          fontSize:11,color:T.sub}}>
+                      {[["Enrique",T.purple],["Jeremy",T.blue],["Mariana",T.green]]
+                        .filter(([n])=>C.personMap[n]).map(([n,c])=>(
+                        <span key={n} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:T.sub}}>
                           <span style={{width:10,height:10,borderRadius:2,background:c}}/>
                           {n} · {fh(C.personMap[n]?.total)}
                         </span>
@@ -890,98 +879,126 @@ Be specific with numbers. No hiring recommendations unless utilization is genuin
                 </div>
               </Card>
 
-              {/* Utilization trend */}
-              <Card style={{marginBottom:14}}>
-                <SectionHead
-                  title="Enrique utilization trend"
-                  sub={`% of ${BILLABLE_TARGET}h billable target per week`}
-                />
-                <div style={{padding:"12px 22px 18px"}}>
-                  <TrendSparkline weekObjs={C.weekObjs} weeklyHours={C.enWeekly}/>
-                  <div style={{display:"flex",justifyContent:"space-between",
-                    marginTop:6,fontSize:10,color:T.sub,fontFamily:T.mono}}>
-                    {C.weekObjs.map((w,i) => (
-                      <div key={w.key} style={{textAlign:"center",minWidth:32}}>
-                        <div style={{
-                          color:utilizationColor((C.enWeekly[w.key]||0)/BILLABLE_TARGET),
-                          fontWeight:700,fontSize:11,marginBottom:2}}>
-                          {fpct((C.enWeekly[w.key]||0)/BILLABLE_TARGET)}
+              {/* ── Per-person breakdowns ── */}
+              <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.12em",
+                textTransform:"uppercase",color:T.sub,marginBottom:10}}>
+                Individual Breakdowns
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:14}}>
+                {[["Enrique",T.purple],["Jeremy",T.blue],["Mariana",T.green]]
+                  .filter(([n])=>C.personMap[n])
+                  .map(([name,color])=>{
+                    const d     = C.personMap[name];
+                    const avg   = d.total / (C.weekObjs.length||1);
+                    const rate  = avg / BILLABLE_TARGET;
+                    const c     = utilizationColor(rate);
+                    const salary= SALARIES[name]||0;
+                    const hrCost= salary/(4.33*BILLABLE_TARGET);
+                    const wksLogged = C.weekObjs.filter(w=>(d.byWeek[w.key]||0)>0).length;
+                    const topClient = name==="Enrique"
+                      ? Object.entries(C.clientMap).filter(([k])=>k!=="Insendra").sort((a,b)=>b[1]-a[1])[0]
+                      : null;
+                    const trend = C.weekObjs.length>=2
+                      ? (d.byWeek[C.weekObjs[C.weekObjs.length-1].key]||0) - (d.byWeek[C.weekObjs[0].key]||0)
+                      : 0;
+
+                    return (
+                      <Card key={name}>
+                        <div style={{display:"flex",alignItems:"stretch"}}>
+                          {/* Left: identity */}
+                          <div style={{width:200,flexShrink:0,padding:"20px 22px",
+                            borderRight:`1px solid ${T.border}`,
+                            display:"flex",flexDirection:"column",justifyContent:"center",gap:6}}>
+                            <div style={{display:"flex",alignItems:"center",gap:10}}>
+                              <div style={{width:36,height:36,borderRadius:10,
+                                background:color+"18",display:"flex",alignItems:"center",
+                                justifyContent:"center",fontSize:15,fontWeight:800,color}}>
+                                {name[0]}
+                              </div>
+                              <div>
+                                <div style={{fontWeight:700,fontSize:14}}>{name}</div>
+                                <div style={{fontSize:11,color:T.sub}}>{ROLES[name]||""}</div>
+                              </div>
+                            </div>
+                            <div style={{fontSize:10,color:T.sub,marginTop:4,lineHeight:1.7}}>
+                              <div>${salary.toLocaleString()}/mo · ${hrCost.toFixed(2)}/hr</div>
+                              <div>Logged {wksLogged}/{C.weekObjs.length} weeks</div>
+                            </div>
+                          </div>
+
+                          {/* Middle: key numbers */}
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",flex:1}}>
+                            {[
+                              {label:"Total logged",    val:fh(d.total),          c:T.text},
+                              {label:"Avg / week",      val:fh(avg),              c},
+                              {label:"Utilization",     val:fpct(rate),           c},
+                            ].map((s,i)=>(
+                              <div key={i} style={{padding:"18px 20px",
+                                borderRight:i<2?`1px solid ${T.border}`:"none"}}>
+                                <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.1em",
+                                  textTransform:"uppercase",color:T.sub,marginBottom:8}}>{s.label}</div>
+                                <div style={{fontSize:20,fontWeight:800,fontFamily:T.mono,
+                                  color:s.c,lineHeight:1}}>{s.val}</div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Right: utilization bar + weekly dots + top client */}
+                          <div style={{width:280,flexShrink:0,padding:"18px 22px",
+                            borderLeft:`1px solid ${T.border}`,
+                            display:"flex",flexDirection:"column",gap:10,justifyContent:"center"}}>
+                            <UtilBar rate={rate} h={avg} target={BILLABLE_TARGET}/>
+                            {/* Weekly utilization dots */}
+                            <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                              {C.weekObjs.map(w=>{
+                                const wh  = d.byWeek[w.key]||0;
+                                const wr  = wh/BILLABLE_TARGET;
+                                const wc  = utilizationColor(wr);
+                                return (
+                                  <div key={w.key} title={`${w.label}: ${wh.toFixed(1)}h`}
+                                    style={{flex:1,height:24,borderRadius:4,
+                                      background:wh>0?wc+"33":T.border,
+                                      border:`1px solid ${wh>0?wc+"66":T.border}`,
+                                      display:"flex",alignItems:"center",justifyContent:"center",
+                                      fontSize:8,fontWeight:700,color:wh>0?wc:T.sub,
+                                      fontFamily:T.mono,cursor:"default"}}>
+                                    {wh>0?Math.round(wh):"·"}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {topClient && (
+                              <div style={{fontSize:10,color:T.sub}}>
+                                Top client: <strong style={{color:T.text}}>{topClient[0]}</strong> · {fh(topClient[1])} ({Math.round(topClient[1]/d.total*100)}%)
+                              </div>
+                            )}
+                            {trend !== 0 && (
+                              <div style={{fontSize:10,color:trend>0?T.red:T.green}}>
+                                {trend>0?"↑":"↓"} {Math.abs(trend).toFixed(1)}h first→last week
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div style={{fontSize:9,color:T.sub}}>{w.label}</div>
-                      </div>
-                    ))}
-                  </div>
+                      </Card>
+                    );
+                  })}
+              </div>
+
+              {/* ── Client hours (full width) ── */}
+              <Card style={{marginBottom:14}}>
+                <SectionHead title="Hours by client" sub="Enrique only · production load per account"/>
+                <div style={{padding:"14px 22px 22px"}}>
+                  <ClientChart clientMap={C.clientMap}/>
                 </div>
               </Card>
 
-              {/* Client hours + task breakdown */}
-              <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:14,marginBottom:14}}>
-                <Card>
-                  <SectionHead title="Hours by client" sub="Enrique only · production load per account"/>
-                  <div style={{padding:"14px 20px 20px"}}>
-                    <ClientChart clientMap={C.clientMap}/>
-                  </div>
-                </Card>
-
-                <Card>
-                  <SectionHead title="Task type breakdown" sub="Enrique only · logging granularity"/>
-                  <div>
-                    {C.edPct > 0.75 && (
-                      <div style={{margin:"12px 16px 0",padding:"9px 12px",
-                        background:T.orangeL,borderRadius:8,fontSize:11,
-                        color:"#92400E",lineHeight:1.7}}>
-                        "Email Design" is <strong>{Math.round(C.edPct*100)}%</strong> of logged hours — too coarse for benchmarks. Recommended task names: <em>Campaign Email, Flow Email, Sign-Up Form, Revisions, QA</em>.
-                      </div>
-                    )}
-                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                      <thead>
-                        <tr>
-                          {["Task","Hours","%","$/hr effective"].map((h,i)=>(
-                            <th key={h} style={{padding:"8px 16px",
-                              textAlign:i>0?"right":"left",fontSize:10,fontWeight:700,
-                              letterSpacing:"0.08em",textTransform:"uppercase",
-                              color:T.sub,borderBottom:`1px solid ${T.border}`,
-                              background:"#FAFAFD"}}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(C.taskMap).sort((a,b)=>b[1]-a[1]).map(([task,hrs],i)=>{
-                          const p   = C.taskTot > 0 ? hrs/C.taskTot : 0;
-                          const rph = C.enTotal > 0 ? TOTAL_MRR/(C.enTotal/(C.weekCount/4.33)) : 0;
-                          return (
-                            <tr key={task} style={{borderBottom:`1px solid ${T.border}`,
-                              background:i%2===0?T.white:"#FAFAFD"}}>
-                              <td style={{padding:"9px 16px",fontWeight:500}}>{task}</td>
-                              <td style={{padding:"9px 16px",textAlign:"right",fontFamily:T.mono}}>{hrs.toFixed(1)}h</td>
-                              <td style={{padding:"9px 16px",textAlign:"right"}}>
-                                <span style={{fontSize:11,fontWeight:700,padding:"2px 7px",
-                                  borderRadius:6,fontFamily:T.mono,
-                                  background:p>0.7?T.orangeL:T.purpleL,
-                                  color:p>0.7?"#92400E":T.purple}}>
-                                  {Math.round(p*100)}%
-                                </span>
-                              </td>
-                              <td style={{padding:"9px 16px",textAlign:"right",
-                                fontFamily:T.mono,color:T.sub,fontSize:11}}>
-                                ${Math.round(rph)}/h
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Cost per task */}
+              {/* ── Cost per task ── */}
               <CostBreakdown taskMap={C.taskMap} taskEntries={C.taskEntries} taskTot={C.taskTot} weekCount={C.weekCount}/>
 
-              {/* Team table */}
+              {/* ── Team table ── */}
               <TeamTable personMap={C.personMap} weekObjs={C.weekObjs}/>
 
-              {/* AI insights */}
+              {/* ── AI insights ── */}
               <Card style={{marginBottom:32}}>
                 <SectionHead
                   title="✦ AI Capacity Analysis"
