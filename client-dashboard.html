@@ -103,6 +103,8 @@ Return ONLY JSON, no markdown:
   return JSON.parse(raw.replace(/```json\s*/g,"").replace(/```\s*/g,"").trim());
 }
 
+// ── Shared UI primitives ──────────────────────────────────────────
+
 const Spin = ({s=20,c=T.purple}) => (
   <span style={{display:"inline-block",width:s,height:s,border:`2px solid ${c}22`,
     borderTopColor:c,borderRadius:"50%",animation:"spin .6s linear infinite"}}/>
@@ -134,6 +136,8 @@ const RatePill = ({val,type="open"}) => {
     </span>
   );
 };
+
+// ── Klaviyo charts ────────────────────────────────────────────────
 
 function RevenueChart({monthly}) {
   const ref = useRef(null);
@@ -335,7 +339,477 @@ function FlowTable({flows,hasRev}) {
   );
 }
 
-function Login({onConnect,err,loading}) {
+// ── Capacity charts ───────────────────────────────────────────────
+
+function WeeklyCapacityChart({ weeks, personMap }) {
+  const ref = useRef(null);
+  const inst = useRef(null);
+  const COLORS = { Enrique: T.purple, Jeremy: T.blue, Mariana: T.green };
+
+  useEffect(() => {
+    if (!ref.current || !weeks?.length) return;
+    if (inst.current) { inst.current.destroy(); inst.current = null; }
+
+    const people = Object.keys(personMap).filter(p => p !== "Unknown");
+    const datasets = people.map(name => ({
+      label: name,
+      data: weeks.map(w => +((personMap[name]?.byWeek[w.key] || 0).toFixed(1))),
+      backgroundColor: (COLORS[name] || T.sub) + "CC",
+      borderRadius: 4,
+      borderSkipped: false,
+      barPercentage: 0.7,
+    }));
+
+    datasets.push({
+      label: "40h capacity",
+      data: weeks.map(() => 40),
+      type: "line",
+      borderColor: T.red + "70",
+      borderDash: [5, 4],
+      borderWidth: 1.5,
+      pointRadius: 0,
+      fill: false,
+      order: 0,
+    });
+
+    inst.current = new window.Chart(ref.current.getContext("2d"), {
+      type: "bar",
+      data: { labels: weeks.map(w => w.label), datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: T.text,
+            padding: 10,
+            titleFont: { family: "DM Sans", size: 11 },
+            bodyFont: { family: "DM Mono", size: 13 },
+            callbacks: { label: c => ` ${c.dataset.label}: ${c.raw}h` }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, border: { display: false }, ticks: { color: T.sub, font: { size: 11 } } },
+          y: { max: 50, beginAtZero: true, grid: { color: "rgba(0,0,0,0.04)" }, border: { display: false }, ticks: { callback: v => v + "h", color: T.sub, font: { size: 11 } } }
+        }
+      }
+    });
+
+    return () => { if (inst.current) { inst.current.destroy(); inst.current = null; } };
+  }, [weeks, personMap]);
+
+  return <div style={{ position: "relative", height: 240 }}><canvas ref={ref} /></div>;
+}
+
+function ClientHoursChart({ clientMap }) {
+  const ref = useRef(null);
+  const inst = useRef(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    if (inst.current) { inst.current.destroy(); inst.current = null; }
+
+    const sorted = Object.entries(clientMap).sort((a, b) => b[1] - a[1]);
+    const labels = sorted.map(([k]) => k === "Insendra" ? "Internal" : k);
+    const values = sorted.map(([, v]) => +v.toFixed(1));
+
+    inst.current = new window.Chart(ref.current.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          backgroundColor: sorted.map(([k]) => k === "Insendra" ? T.sub + "88" : T.purple + "CC"),
+          borderRadius: 4,
+          barPercentage: 0.65,
+        }]
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { backgroundColor: T.text, padding: 10, callbacks: { label: c => ` ${c.raw.toFixed(1)}h` } }
+        },
+        scales: {
+          x: { grid: { color: "rgba(0,0,0,0.04)" }, border: { display: false }, ticks: { callback: v => v + "h", color: T.sub, font: { size: 11 } } },
+          y: { grid: { display: false }, border: { display: false }, ticks: { color: T.sub, font: { size: 12 } } }
+        }
+      }
+    });
+
+    return () => { if (inst.current) { inst.current.destroy(); inst.current = null; } };
+  }, [clientMap]);
+
+  const h = Math.max(200, Object.keys(clientMap).length * 44 + 60);
+  return <div style={{ position: "relative", height: h }}><canvas ref={ref} /></div>;
+}
+
+// ── Capacity view ─────────────────────────────────────────────────
+
+function CapacityView({ onBack }) {
+  const [weeks, setWeeks] = useState(8);
+  const [data, setData]   = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr]     = useState(null);
+  const [capIns, setCapIns] = useState(null);
+  const [capInsLoad, setCapInsLoad] = useState(false);
+
+  useEffect(() => {
+    setLoading(true); setErr(null); setData(null);
+    fetch(`${PROXY}/harvest-data?weeks=${weeks}`)
+      .then(r => r.json().then(j => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => { if (!ok) throw new Error(j.error); setData(j); })
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, [weeks]);
+
+  const computed = useMemo(() => {
+    if (!data?.entries?.length) return null;
+    const entries = data.entries;
+
+    const weekKey = ds => {
+      const d = new Date(ds + "T12:00:00");
+      const off = d.getDay() === 0 ? -6 : 1 - d.getDay();
+      return new Date(d.getTime() + off * 86400000).toISOString().slice(0, 10);
+    };
+    const fmtWk = ds =>
+      new Date(ds + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+    const allWeeks = [...new Set(entries.map(e => weekKey(e.spent_date)))].sort();
+    const weekObjs = allWeeks.map(k => ({ key: k, label: fmtWk(k) }));
+
+    const personMap = {};
+    for (const e of entries) {
+      const fn = (e.user?.name || "Unknown").split(" ")[0];
+      if (!personMap[fn]) personMap[fn] = { total: 0, byWeek: {} };
+      personMap[fn].total += e.hours;
+      const wk = weekKey(e.spent_date);
+      personMap[fn].byWeek[wk] = (personMap[fn].byWeek[wk] || 0) + e.hours;
+    }
+
+    const clientMap = {};
+    const taskMap   = {};
+    for (const e of entries) {
+      if (!e.user?.name?.startsWith("Enrique")) continue;
+      const c = e.client?.name || "Unknown";
+      clientMap[c] = (clientMap[c] || 0) + e.hours;
+      const t = e.task?.name || "Unknown";
+      taskMap[t] = (taskMap[t] || 0) + e.hours;
+    }
+
+    const enTotal  = personMap["Enrique"]?.total || 0;
+    const enAvg    = enTotal / (allWeeks.length || 1);
+    const taskTotal = Object.values(taskMap).reduce((s, v) => s + v, 0);
+    const emailDesignPct = taskTotal > 0 ? (taskMap["Email Design"] || 0) / taskTotal : 0;
+    const amTotal  = (personMap["Jeremy"]?.total || 0) + (personMap["Mariana"]?.total || 0);
+
+    return {
+      weekObjs, personMap, clientMap, taskMap, taskTotal, emailDesignPct,
+      enTotal: Math.round(enTotal * 10) / 10,
+      enAvg:   Math.round(enAvg * 10) / 10,
+      amTotal: Math.round(amTotal * 10) / 10,
+    };
+  }, [data]);
+
+  async function loadCapacityInsights() {
+    if (!computed) return;
+    setCapInsLoad(true);
+    setCapIns(null);
+    try {
+      const { personMap, clientMap, taskMap, enAvg, weekObjs } = computed;
+      const personSummary = Object.entries(personMap)
+        .map(([n, d]) => `${n}: ${d.total.toFixed(1)}h total, ${(d.total / (weekObjs.length || 1)).toFixed(1)}h/wk avg`)
+        .join("; ");
+      const clientSummary = Object.entries(clientMap).sort((a,b) => b[1]-a[1])
+        .map(([c,h]) => `${c}: ${h.toFixed(1)}h`).join("; ");
+      const taskSummary = Object.entries(taskMap).sort((a,b) => b[1]-a[1])
+        .map(([t,h]) => `${t}: ${h.toFixed(1)}h`).join("; ");
+
+      const prompt = `You are analyzing ${weeks}-week capacity data for a small email marketing agency (Insendra).
+
+TEAM HOURS (last ${weeks} weeks):
+${personSummary}
+
+ENRIQUE (production) CLIENT BREAKDOWN:
+${clientSummary}
+
+ENRIQUE TASK TYPES:
+${taskSummary}
+
+Context: Enrique is the only full-time production designer. Target: ~40h/wk. He logs ${enAvg.toFixed(1)}h/wk on average — but likely under-logs, so actual utilization is higher. Mariana is a new account manager ramping up. Jeremy is the founder logging sporadically.
+
+The team wants to know: Is Enrique approaching capacity? Should they hire a second designer? Which clients are heaviest on production?
+
+Return exactly 4 insights as a JSON array (no markdown, no backticks):
+[{"type":"good"|"warn"|"info","emoji":"<single emoji>","title":"<8 words max>","body":"<2 sentences with specific numbers and a concrete recommendation>"}]`;
+
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 800,
+          system: "Return ONLY valid JSON arrays. No markdown. No prose.",
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+      const d = await r.json();
+      const raw = (d.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+      setCapIns(JSON.parse(raw.replace(/```json\s*/g,"").replace(/```\s*/g,"").trim()));
+    } catch(e) {
+      console.error("Capacity insights error:", e);
+    } finally {
+      setCapInsLoad(false);
+    }
+  }
+
+  const RANGE_OPTS = [{ label: "4 weeks", val: 4 }, { label: "8 weeks", val: 8 }, { label: "12 weeks", val: 12 }];
+  const PERSON_COLORS = { Enrique: T.purple, Jeremy: T.blue, Mariana: T.green };
+
+  return (
+    <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'DM Sans',sans-serif" }}>
+      {/* Header */}
+      <div style={{ background: T.white, borderBottom: `1px solid ${T.border}`, height: 54,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 26px", position: "sticky", top: 0, zIndex: 30 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 7,
+            background: "linear-gradient(135deg,#6D4DF4,#00C9B1)",
+            display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "DM Mono" }}>i</span>
+          </div>
+          <span style={{ fontWeight: 700, fontSize: 14, letterSpacing: "-0.02em" }}>insendra</span>
+          <span style={{ width: 1, height: 15, background: T.border, margin: "0 6px" }} />
+          <span style={{ fontSize: 12, color: T.sub }}>Team Capacity</span>
+        </div>
+        <button onClick={onBack}
+          style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub,
+            borderRadius: 8, padding: "5px 14px", cursor: "pointer", fontSize: 12,
+            fontWeight: 500, fontFamily: "'DM Sans',sans-serif" }}>
+          ← Client Intelligence
+        </button>
+      </div>
+
+      <div style={{ padding: "22px 26px", maxWidth: 1300, margin: "0 auto" }}>
+        {/* Title + range selector */}
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 2 }}>
+              Team Capacity
+            </div>
+            <div style={{ fontSize: 12, color: T.sub }}>
+              Harvest time data{data ? ` · ${data.from} → ${data.to} · ${data.count} entries` : ""}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {RANGE_OPTS.map(o => (
+              <button key={o.val} onClick={() => setWeeks(o.val)}
+                style={{ padding: "5px 14px",
+                  border: `1px solid ${weeks === o.val ? T.purple : T.border}`,
+                  background: weeks === o.val ? T.purpleL : T.white,
+                  color: weeks === o.val ? T.purple : T.sub,
+                  borderRadius: 8, cursor: "pointer", fontSize: 12,
+                  fontWeight: weeks === o.val ? 600 : 400,
+                  fontFamily: "'DM Sans',sans-serif" }}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "48px 0", color: T.sub, fontSize: 13 }}>
+            <Spin s={20} /> Loading Harvest data…
+          </div>
+        )}
+
+        {/* Error */}
+        {!loading && err && (
+          <Card style={{ padding: "22px 24px", marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.red, marginBottom: 8 }}>
+              {err.includes("not configured") ? "Harvest credentials not configured" : "Could not load Harvest data"}
+            </div>
+            <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.8 }}>
+              {err.includes("not configured")
+                ? <>Add <code style={{background:"#F0F1F7",padding:"1px 5px",borderRadius:4,fontFamily:T.mono}}>HARVEST_TOKEN</code> and <code style={{background:"#F0F1F7",padding:"1px 5px",borderRadius:4,fontFamily:T.mono}}>HARVEST_ACCOUNT_ID</code> to your Render environment variables. Generate a personal access token at <strong>id.getharvest.com</strong>.</>
+                : err}
+            </div>
+          </Card>
+        )}
+
+        {/* Data views */}
+        {!loading && !err && computed && (
+          <>
+            {/* Summary cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(165px,1fr))", gap: 10, marginBottom: 14 }}>
+              {[
+                { label: "Enrique — total hours", val: computed.enTotal + "h", sub: `over ${weeks} weeks` },
+                { label: "Weekly avg (Enrique)",  val: computed.enAvg + "h",
+                  c: computed.enAvg >= 38 ? T.red : computed.enAvg >= 28 ? T.orange : T.sub,
+                  sub: "vs 40h/wk capacity" },
+                { label: "AM hours logged",        val: computed.amTotal + "h", sub: "Jeremy + Mariana" },
+                { label: "Weeks in range",         val: String(computed.weekObjs.length), sub: `${data.count} time entries` },
+              ].map((s, i) => (
+                <Card key={i} style={{ padding: "16px 18px" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em",
+                    textTransform: "uppercase", color: T.sub, marginBottom: 9 }}>{s.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: s.c || T.text,
+                    lineHeight: 1, fontFamily: T.mono, marginBottom: 5 }}>{s.val}</div>
+                  <div style={{ fontSize: 10, color: T.sub }}>{s.sub}</div>
+                </Card>
+              ))}
+            </div>
+
+            {/* Under-logging notice */}
+            {computed.enAvg < 32 && (
+              <div style={{ display: "flex", gap: 12, padding: "12px 16px",
+                background: T.orangeL, border: `1px solid #FDE68A`,
+                borderRadius: 10, marginBottom: 14, fontSize: 12, color: "#92400E", lineHeight: 1.7 }}>
+                <span style={{ flexShrink: 0 }}>⚠</span>
+                <span>Enrique is averaging <strong>{computed.enAvg}h/wk</strong> logged — well below a 40h work week, suggesting under-logging rather than excess capacity. Encourage consistent daily time tracking before using these numbers to make hiring decisions.</span>
+              </div>
+            )}
+
+            {/* Weekly capacity chart */}
+            <Card style={{ marginBottom: 14 }}>
+              <SectionHead
+                title="Weekly hours"
+                sub="By team member · dashed line = 40h capacity target"
+                right={
+                  <div style={{ display: "flex", gap: 14 }}>
+                    {Object.entries(PERSON_COLORS).map(([name, color]) =>
+                      computed.personMap[name] ? (
+                        <span key={name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: T.sub }}>
+                          <span style={{ width: 10, height: 10, borderRadius: 2, background: color }} />
+                          {name} · {computed.personMap[name].total.toFixed(1)}h
+                        </span>
+                      ) : null
+                    )}
+                  </div>
+                }
+              />
+              <div style={{ padding: "16px 20px 20px" }}>
+                <WeeklyCapacityChart weeks={computed.weekObjs} personMap={computed.personMap} />
+              </div>
+            </Card>
+
+            {/* Client hours + task breakdown */}
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14, marginBottom: 14 }}>
+              <Card>
+                <SectionHead title="Hours by client" sub="Enrique only · production time" />
+                <div style={{ padding: "16px 20px 20px" }}>
+                  <ClientHoursChart clientMap={computed.clientMap} />
+                </div>
+              </Card>
+
+              <Card>
+                <SectionHead title="Task type breakdown" sub="Enrique only · logging health" />
+                <div>
+                  {computed.emailDesignPct > 0.75 && (
+                    <div style={{ margin: "12px 16px 0", padding: "9px 12px",
+                      background: T.orangeL, borderRadius: 8, fontSize: 11,
+                      color: "#92400E", lineHeight: 1.6 }}>
+                      "Email Design" = <strong>{Math.round(computed.emailDesignPct * 100)}%</strong> of hours — too broad for task benchmarks. Consider splitting into: Campaign Email, Flow Email, Sign-Up Form, Revisions, QA.
+                    </div>
+                  )}
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr>
+                        {["Task", "Hours", "%"].map((h, i) => (
+                          <th key={h} style={{ padding: "8px 16px",
+                            textAlign: i > 0 ? "right" : "left",
+                            fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+                            textTransform: "uppercase", color: T.sub,
+                            borderBottom: `1px solid ${T.border}`, background: "#FAFAFD" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(computed.taskMap).sort((a,b) => b[1]-a[1]).map(([task, hrs], i) => {
+                        const p = computed.taskTotal > 0 ? hrs / computed.taskTotal : 0;
+                        return (
+                          <tr key={task} style={{ borderBottom: `1px solid ${T.border}`, background: i%2===0?T.white:"#FBFBFE" }}>
+                            <td style={{ padding: "9px 16px", fontWeight: 500 }}>{task}</td>
+                            <td style={{ padding: "9px 16px", textAlign: "right", fontFamily: T.mono }}>{hrs.toFixed(1)}h</td>
+                            <td style={{ padding: "9px 16px", textAlign: "right" }}>
+                              <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 7px",
+                                borderRadius: 6, fontFamily: T.mono,
+                                background: p > 0.7 ? T.orangeL : T.purpleL,
+                                color: p > 0.7 ? "#92400E" : T.purple }}>
+                                {Math.round(p * 100)}%
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+
+            {/* AI capacity insights */}
+            <Card style={{ marginBottom: 28 }}>
+              <SectionHead
+                title="✦ AI Capacity Analysis"
+                sub="Hiring signal and capacity recommendations"
+                right={
+                  <button onClick={loadCapacityInsights} disabled={capInsLoad}
+                    style={{ display: "flex", alignItems: "center", gap: 6, background: "none",
+                      border: `1px solid ${T.border}`, borderRadius: 8, padding: "5px 12px",
+                      cursor: capInsLoad ? "not-allowed" : "pointer", fontSize: 11, color: T.sub,
+                      fontFamily: "'DM Sans',sans-serif", fontWeight: 500 }}>
+                    {capInsLoad ? <><Spin s={12}/> Analyzing…</> : capIns ? "↻ Refresh" : "Analyze ✦"}
+                  </button>
+                }
+              />
+              {capInsLoad ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px", color: T.sub, fontSize: 13 }}>
+                  <Spin s={16} /> Analyzing capacity data…
+                </div>
+              ) : capIns ? (
+                <div style={{ padding: "10px 16px" }}>
+                  {capIns.map((ins, i) => {
+                    const bg = { good: T.greenL, warn: T.orangeL, info: T.blueL }[ins.type] || T.blueL;
+                    return (
+                      <div key={i} style={{ display: "flex", gap: 14, padding: "12px 4px",
+                        borderBottom: i < capIns.length - 1 ? `1px solid ${T.border}` : "none" }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                          background: bg, display: "flex", alignItems: "center",
+                          justifyContent: "center", fontSize: "1.05rem" }}>{ins.emoji}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{ins.title}</div>
+                          <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.7 }}>{ins.body}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ padding: "24px", textAlign: "center", fontSize: 13, color: T.sub }}>
+                  Click "Analyze ✦" to get AI-powered hiring signal and capacity insights.
+                </div>
+              )}
+            </Card>
+          </>
+        )}
+
+        {!loading && !err && !computed && data && (
+          <Card style={{ padding: "32px 24px", textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: T.sub }}>No time entries found for this period.</div>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Klaviyo views ─────────────────────────────────────────────────
+
+function Login({onConnect,err,loading,onCapacity}) {
   const [key,setKey]   = useState("");
   const [name,setName] = useState("");
   return (
@@ -388,6 +862,13 @@ function Login({onConnect,err,loading}) {
             border:`1px solid #FECACA`,borderRadius:9,fontSize:12,color:T.red,lineHeight:1.6}}>
             {err}
           </div>}
+          <div style={{marginTop:20,textAlign:"center"}}>
+            <button onClick={onCapacity}
+              style={{background:"none",border:"none",color:T.purple,cursor:"pointer",
+                fontSize:12,fontFamily:"'DM Sans',sans-serif",textDecoration:"underline",opacity:0.85}}>
+              View Team Capacity →
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -405,7 +886,7 @@ function Loading({msg}) {
   );
 }
 
-function Dashboard({kData,insights,insLoad,onRefresh,clientLabel,onOut}) {
+function Dashboard({kData,insights,insLoad,onRefresh,clientLabel,onOut,onCapacity}) {
   const camps  = kData.campaigns??[];
   const flows  = kData.flows??[];
   const hasRev = kData.has_revenue;
@@ -448,13 +929,19 @@ function Dashboard({kData,insights,insLoad,onRefresh,clientLabel,onOut}) {
           <span style={{width:1,height:15,background:T.border,margin:"0 6px"}}/>
           <span style={{fontSize:12,color:T.sub}}>Client Intelligence</span>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{textAlign:"right"}}>
             <div style={{fontSize:13,fontWeight:600}}>{clientLabel||kData.account?.name||"Account"}</div>
             <div style={{fontSize:11,color:T.sub}}>
               {[kData.account?.timezone,kData.account?.currency].filter(Boolean).join(" · ")||"Klaviyo Account"}
             </div>
           </div>
+          <button onClick={onCapacity}
+            style={{background:"none",border:`1px solid ${T.border}`,color:T.sub,
+              borderRadius:8,padding:"5px 14px",cursor:"pointer",fontSize:12,
+              fontWeight:500,fontFamily:"'DM Sans',sans-serif"}}>
+            Team Capacity
+          </button>
           <button onClick={onOut}
             style={{background:"none",border:`1px solid ${T.border}`,color:T.sub,
               borderRadius:8,padding:"5px 14px",cursor:"pointer",fontSize:12,
@@ -578,14 +1065,17 @@ function Dashboard({kData,insights,insLoad,onRefresh,clientLabel,onOut}) {
   );
 }
 
+// ── App root ──────────────────────────────────────────────────────
+
 function App() {
-  const [phase,  setPhase]  = useState("login");
-  const [msg,    setMsg]    = useState("");
-  const [err,    setErr]    = useState("");
-  const [kData,  setKData]  = useState(null);
-  const [ins,    setIns]    = useState(null);
-  const [insLoad,setIL]     = useState(false);
-  const [label,  setLabel]  = useState("");
+  const [view,   setView]  = useState(() => new URLSearchParams(window.location.search).get("view") === "capacity" ? "capacity" : "intelligence");
+  const [phase,  setPhase] = useState("login");
+  const [msg,    setMsg]   = useState("");
+  const [err,    setErr]   = useState("");
+  const [kData,  setKData] = useState(null);
+  const [ins,    setIns]   = useState(null);
+  const [insLoad,setIL]    = useState(false);
+  const [label,  setLabel] = useState("");
 
   const connect = useCallback(async(key,clientLabel)=>{
     setErr(""); setLabel(clientLabel); setPhase("loading"); setMsg("Fetching Klaviyo data…");
@@ -605,16 +1095,17 @@ function App() {
     }
   },[]);
 
-  const signOut = ()=>{ setPhase("login");setKData(null);setIns(null);setLabel("");setErr("");setIL(false); };
-  const refresh = useCallback(async()=>{
-    if(!kData) return; setIL(true);
-    setIns(await loadInsights(kData).catch(()=>null)); setIL(false);
-  },[kData]);
+  const signOut    = () => { setPhase("login");setKData(null);setIns(null);setLabel("");setErr("");setIL(false); };
+  const refresh    = useCallback(async()=>{ if(!kData) return; setIL(true); setIns(await loadInsights(kData).catch(()=>null)); setIL(false); },[kData]);
+  const toCapacity = () => setView("capacity");
+  const toIntel    = () => setView("intelligence");
 
-  if (phase==="login")     return <Login onConnect={connect} err={err} loading={false}/>;
-  if (phase==="loading")   return <Loading msg={msg}/>;
-  if (phase==="dashboard") return <Dashboard kData={kData} insights={ins} insLoad={insLoad}
-    onRefresh={refresh} clientLabel={label} onOut={signOut}/>;
+  if (view === "capacity") return <CapacityView onBack={toIntel} />;
+
+  if (phase === "login")     return <Login onConnect={connect} err={err} loading={false} onCapacity={toCapacity}/>;
+  if (phase === "loading")   return <Loading msg={msg}/>;
+  if (phase === "dashboard") return <Dashboard kData={kData} insights={ins} insLoad={insLoad}
+    onRefresh={refresh} clientLabel={label} onOut={signOut} onCapacity={toCapacity}/>;
   return null;
 }
 
