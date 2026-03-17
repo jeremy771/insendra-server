@@ -908,18 +908,23 @@ Be specific with numbers. No hiring recommendations unless utilization is genuin
             <>
               {/* ── Team overview stat strip ── */}
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(155px,1fr))",gap:10,marginBottom:14}}>
-                {/* Per-person weekly avgs — the most scannable top-line view */}
-                {[["Enrique",T.purple],["Jeremy",T.blue],["Mariana",T.green]]
-                  .filter(([n]) => C.personMap[n])
-                  .map(([name, color]) => {
-                    const avg  = C.personMap[name].total / (C.weekObjs.length || 1);
-                    const rate = avg / BILLABLE_TARGET;
+                {/* Per-person weekly avgs */}
+                {[
+                  { name:"Enrique", color:T.purple, role:"production", target:BILLABLE_TARGET },
+                  { name:"Jeremy",  color:T.blue,   role:"founder",    target:null },
+                  { name:"Mariana", color:T.green,  role:"am",         target:null },
+                ].filter(p => C.personMap[p.name]).map(p => {
+                    const avg  = C.personMap[p.name].total / (C.weekObjs.length || 1);
+                    const rate = p.target ? avg / p.target : null;
+                    const wksLogged = C.weekObjs.filter(w=>(C.personMap[p.name].byWeek[w.key]||0)>0).length;
                     return (
-                      <StatCard key={name} big
-                        label={`${name} avg / week`}
+                      <StatCard key={p.name} big
+                        label={`${p.name} avg / week`}
                         value={fh(avg)}
-                        sub={`${fpct(rate)} of ${BILLABLE_TARGET}h target`}
-                        color={utilizationColor(rate)}
+                        sub={rate != null
+                          ? `${fpct(rate)} of ${p.target}h billable target`
+                          : `logged ${wksLogged} of ${C.weekObjs.length} weeks`}
+                        color={rate != null ? utilizationColor(rate) : p.color}
                       />
                     );
                   })
