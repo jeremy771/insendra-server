@@ -1326,6 +1326,10 @@ app.get("/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "dashboard.html"));
 });
 
+app.get("/client-dashboard", (req, res) => {
+  res.sendFile(path.join(__dirname, "client-dashboard.html"));
+});
+
 app.get("/accountability", (req, res) => {
   res.sendFile(path.join(__dirname, "accountability.html"));
 });
