@@ -985,7 +985,7 @@ function buildDMMessageSrv(person,tasks,weekly){
       type:"section",
       fields:[
         {type:"mrkdwn",text:`*${person.name}*\n${person.role}`},
-        {type:"mrkdwn",text:`*${date}*\n${total} task${total!==1?"s":""} today · <${`${SERVER_URL}/dashboard#user=${person.id}`}|📊 My Dashboard>`},
+        {type:"mrkdwn",text:`*${date}*\n${total} task${total!==1?"s":""} today · <${`${SERVER_URL}/accountability#user=${person.id}`}|📊 My Dashboard>`},
       ]
     }]
   });
