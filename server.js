@@ -18,19 +18,16 @@ const AT_CLIENT_TABLE = "tblCp6L6Ccpg9icak";
 app.use(cors());
 app.use(express.json());
 
-// ── Helpers ──────────────────────────────────────────────────────
 const PERF_LOG = "./performance-log.json";
 const SNAPSHOT = "./status-snapshot.json";
 
-// ── Dynamic config (refreshed every 30 mins) ─────────────────────
-let dynamicTeam    = null; // { [atUserId]: { name, slackId, role } }
-let dynamicClients = null; // { [clientName]: { slackChannelId, prefix } }
+let dynamicTeam    = null;
+let dynamicClients = null;
 let configLoadedAt = 0;
 const CONFIG_TTL   = 30 * 60 * 1000;
 
 async function loadDynamicConfig() {
   try {
-    // ── Fetch team ──────────────────────────────────────────────
     const teamRes  = await fetch(
       `https://api.airtable.com/v0/${AT_BASE}/${AT_TEAM_TABLE}?pageSize=100`,
       { headers: { Authorization: `Bearer ${AT_TOKEN}` } }
@@ -46,7 +43,6 @@ async function loadDynamicConfig() {
       if (atId && slackId) team[atId] = { name, slackId, role };
     });
 
-    // ── Fetch active clients ────────────────────────────────────
     const clientRes  = await fetch(
       `https://api.airtable.com/v0/${AT_BASE}/${AT_CLIENT_TABLE}?pageSize=100`,
       { headers: { Authorization: `Bearer ${AT_TOKEN}` } }
@@ -154,10 +150,8 @@ function updatePerformanceLog(deliverables) {
   console.log(`Performance log updated — ${perfLog.length} entries`);
 }
 
-// ── GET /health ───────────────────────────────────────────────────
 app.get("/health", (req, res) => res.json({ ok: true, version: "2.0.0" }));
 
-// ── GET /deliverables ─────────────────────────────────────────────
 app.get("/deliverables", async (req, res) => {
   try {
     const getDate = v => v ? (Array.isArray(v) ? v[0] : v) : null;
@@ -204,7 +198,6 @@ app.get("/deliverables", async (req, res) => {
   }
 });
 
-// ── POST /send-dm ─────────────────────────────────────────────────
 app.post("/send-dm", async (req, res) => {
   try {
     const { slackUserId, text, blocks, attachments } = req.body;
@@ -224,7 +217,6 @@ app.post("/send-dm", async (req, res) => {
   }
 });
 
-// ── POST /send-channel ────────────────────────────────────────────
 app.post("/send-channel", async (req, res) => {
   try {
     const { channelId, text, blocks, attachments } = req.body;
@@ -244,7 +236,6 @@ app.post("/send-channel", async (req, res) => {
   }
 });
 
-// ── GET /comments/:recordId ───────────────────────────────────────
 app.get("/comments/:recordId", async (req, res) => {
   try {
     const atRes = await fetch(
@@ -259,12 +250,10 @@ app.get("/comments/:recordId", async (req, res) => {
   }
 });
 
-// ── GET /performance ──────────────────────────────────────────────
 app.get("/performance", (req, res) => {
   res.json({ entries: readJSON(PERF_LOG, []) });
 });
 
-// ── POST /snapshot ────────────────────────────────────────────────
 app.post("/snapshot", async (req, res) => {
   try {
     const getDate = v => v ? (Array.isArray(v) ? v[0] : v) : null;
@@ -304,7 +293,6 @@ app.post("/snapshot", async (req, res) => {
   }
 });
 
-// ── POST /backfill ────────────────────────────────────────────────
 app.post("/backfill", async (req, res) => {
   try {
     const { since = "2026-01-01" } = req.body;
@@ -403,7 +391,6 @@ app.post("/backfill", async (req, res) => {
   }
 });
 
-// ── POST /ai-proxy — forwards AI requests to Anthropic ───────────
 app.post("/ai-proxy", async (req, res) => {
   if (!ANTHROPIC_KEY) return res.status(503).json({ error: "ANTHROPIC_KEY not configured" });
   try {
@@ -423,9 +410,6 @@ app.post("/ai-proxy", async (req, res) => {
   }
 });
 
-// ── GET /harvest-data ─────────────────────────────────────────────
-// Returns paginated Harvest time entries for the given number of weeks.
-// Requires HARVEST_TOKEN and HARVEST_ACCOUNT_ID env vars.
 app.get("/harvest-data", async (req, res) => {
   if (!HARVEST_TOKEN || !HARVEST_ACCOUNT_ID) {
     return res.status(503).json({
@@ -456,7 +440,7 @@ app.get("/harvest-data", async (req, res) => {
       entries = entries.concat(data.time_entries || []);
       if (!data.next_page) break;
       page++;
-      if (page > 20) break; // safety cap
+      if (page > 20) break;
     }
     res.json({ entries, from, to, count: entries.length });
   } catch (err) {
@@ -465,7 +449,6 @@ app.get("/harvest-data", async (req, res) => {
   }
 });
 
-// ── DM On/Off Switch ─────────────────────────────────────────────
 let dmsEnabled = true;
 
 app.post("/dms-toggle", (req, res) => {
@@ -478,7 +461,6 @@ app.get("/dms-status", (req, res) => {
   res.json({ dmsEnabled });
 });
 
-// ── Status Change Polling ─────────────────────────────────────────
 const TEAM = {
   "usrDi7oYvN51c0Z4H": { name: "Mariana Lara",       slackId: "U0AGYC9PNUR",  role: "manager"     },
   "usrov3FwJAjCJQSKY": { name: "Laryssa Wirstiuk",   slackId: "U0A9ZBD7K9B",  role: "manager"     },
@@ -610,7 +592,7 @@ async function fetchAllDeliverables() {
         manager:    getPpl(f["Manager"]),
         copywriter: getPpl(f["Copywriter"]),
         designer:   getPpl(f["Designer"]),
-        uploader:   getPpl(f["Uploader"]) [0] || null,
+        uploader:   getPpl(f["Uploader"])[0] || null,
       });
     });
     offset = data.offset || null;
@@ -683,7 +665,6 @@ async function pollForStatusChanges() {
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
 
-// ── Slack Event Subscriptions ─────────────────────────────────────
 const processedEvents = new Set();
 
 let deliverableCache = null;
@@ -834,7 +815,6 @@ async function buildTaskContext(records, userSlackId) {
   return lines.join("\n");
 }
 
-// ── GET /config — dynamic team + clients ─────────────────────────
 app.get("/config", async (req, res) => {
   try {
     const team    = await getTeam();
@@ -845,8 +825,6 @@ app.get("/config", async (req, res) => {
   }
 });
 
-
-// ── Server-side Daily DM Scheduler ───────────────────────────────
 const SERVER_URL = "https://insendra-server.onrender.com";
 
 function estPartsSrv() {
@@ -867,6 +845,10 @@ function estTodaySrv() {
   const est = estPartsSrv();
   return new Date(est.getFullYear(), est.getMonth(), est.getDate());
 }
+
+// Alias used by buildDMMessageSrv and buildDigestMessageSrv
+function estToday() { return estTodaySrv(); }
+function daysUntil(str) { return daysUntilEST(str); }
 
 const isMondaySrv = () => estPartsSrv().getDay() === 1;
 
@@ -939,15 +921,6 @@ function urgencyInfo(days) {
   if (days <= 3) return { section: "today",   label: "due soon" };
   if (days <= 7) return { section: "soon",    label: "coming up" };
   return { section: "later", label: "upcoming" };
-}
-
-function estToday() {
-  const est = estPartsSrv();
-  return new Date(est.getFullYear(), est.getMonth(), est.getDate());
-}
-
-function daysUntil(str) {
-  return daysUntilEST(str);
 }
 
 function buildSynopsis(client, grouped) {
@@ -1335,13 +1308,11 @@ function scheduleNextDailyRun() {
   startDailyScheduler();
 }
 
-// ── POST /run-dms-now ─────────────────────────────────────────────
 app.post("/run-dms-now", async (req, res) => {
   res.json({ ok: true, message: "DM run triggered — check Render logs" });
   await runDailyDMs();
 });
 
-// ── GET /dashboard ────────────────────────────────────────────────
 app.get("/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "dashboard.html"));
 });
